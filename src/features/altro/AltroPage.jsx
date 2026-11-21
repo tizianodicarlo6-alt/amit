@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { STUDIO } from '../../config.js';
 import { useDbQuery } from '../../db/useDbQuery.js';
 import { db, getMeta } from '../../db/db.js';
 import { createBackup, importBackup, markBackupDone } from '../../db/backup.js';
@@ -94,7 +96,10 @@ export default function AltroPage() {
   return (
     <div className="page">
       <header className="page-head">
-        <h1>Altro</h1>
+        <Link to="/home" className="icon-btn" aria-label="Torna alla Home">
+          <Icon name="back" />
+        </Link>
+        <h1>Impostazioni</h1>
       </header>
 
       <section className="card stack">
@@ -157,7 +162,7 @@ export default function AltroPage() {
 
       <div className="about">
         <img src={`${import.meta.env.BASE_URL}logo-bianco.png`} alt="Logo Amit" />
-        <p className="muted small center">Amit · versione 0.1 · funziona anche offline</p>
+        <p className="muted small center">Amit · by {STUDIO.name} · versione 0.2 · funziona anche offline</p>
       </div>
     </div>
   );

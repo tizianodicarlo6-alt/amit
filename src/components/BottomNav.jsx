@@ -13,13 +13,13 @@ export default function BottomNav() {
   const { openCapture } = useCapture();
   return (
     <nav className="bottom-nav" aria-label="Navigazione principale">
+      <Item to="/home" icon="home" label="Home" />
       <Item to="/taccuino" icon="taccuino" label="Taccuino" />
-      <Item to="/tracce" icon="tracce" label="Tracce" />
       <button className="nav-capture" onClick={() => openCapture()} aria-label="Nuova idea">
         <Icon name="plus" size={32} stroke={2.6} />
       </button>
+      <Item to="/tracce" icon="tracce" label="Tracce" />
       <Item to="/progetti" icon="progetti" label="Progetti" />
-      <Item to="/altro" icon="altro" label="Altro" />
     </nav>
   );
 }

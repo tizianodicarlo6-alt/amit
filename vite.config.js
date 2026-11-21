@@ -11,9 +11,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.png', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Amit',
-        short_name: 'Amit',
-        description: "Il tuo quaderno per scrivere rap",
+        name: 'Amit Studio',
+        short_name: 'Amit Studio',
+        description: "Scrivi, registra e organizza i tuoi brani. By Amit Studio.",
         lang: 'it',
         start_url: '.',
         scope: '.',

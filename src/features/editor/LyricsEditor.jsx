@@ -156,11 +156,11 @@ export default function LyricsEditor({ track }) {
       {showRhymes && (
         <div className="rhyme-legend muted small">
           <span>
-            <span className="rhyme" style={{ '--rc': RHYME_COLORS[0] }}>rima</span> {analysis.stats.rime} gruppi
+            <span className="rhyme" style={{ '--rc': RHYME_COLORS[0] }}>rima</span> {analysis.stats.rime} {analysis.stats.rime === 1 ? "gruppo" : "gruppi"}
           </span>
           {mode === 'assonanze' && (
             <span>
-              <span className="rhyme ass" style={{ '--rc': RHYME_COLORS[1] }}>assonanza</span> {analysis.stats.assonanze} gruppi
+              <span className="rhyme ass" style={{ '--rc': RHYME_COLORS[1] }}>assonanza</span> {analysis.stats.assonanze} {analysis.stats.assonanze === 1 ? "gruppo" : "gruppi"}
             </span>
           )}
         </div>
