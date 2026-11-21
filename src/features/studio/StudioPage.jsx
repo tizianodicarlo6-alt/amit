@@ -16,7 +16,9 @@ import MixEditor from './MixEditor.jsx';
 import StudioSettings from './StudioSettings.jsx';
 import StructureSheet from './StructureSheet.jsx';
 import BeatTimeline from './BeatTimeline.jsx';
-import { FX_ORDER, FX_PRESETS, dbToGain } from './fx.js';
+import { dbToGain, normalizeStrip } from './fx.js';
+import EffectsSheet from './EffectsSheet.jsx';
+import MixSheet from './MixSheet.jsx';
 import { buildTimeline, lineAt, nextBlockAfter, snapToBeat } from './timeline.js';
 
 export default function StudioPage() {
@@ -48,6 +50,7 @@ export default function StudioPage() {
   const [selectedLine, setSelectedLine] = useState(null);
   const [sheet, setSheet] = useState(null); // 'settings' | 'structure'
   const [view, setView] = useState('rec'); // 'rec' = Registra · 'mix' = Montaggio
+  const [solo, setSolo] = useState([]); // take in "solo" (si sentono solo quelle)
   const [editTick, setEditTick] = useState(0);
   const playFromRef = useRef(null);
   const [sync, setSync] = useState(null); // { queue: [blockId...], marked: n } durante "Segna a orecchio"
@@ -81,7 +84,7 @@ export default function StudioPage() {
 
   // Struttura (per traccia)
   const st = track?.studio || {};
-  const fx = FX_PRESETS[st.fx] ? st.fx : 'provino';
+  const fx = normalizeStrip(st.fx); // catena effetti della voce (per traccia)
   const barsPerLine = st.barsPerLine ?? 1;
   const starts = st.starts || {};
   const attackAuto = st.attack == null && st.introBars == null;
@@ -155,7 +158,8 @@ export default function StudioPage() {
   };
 
   // Voci da mixare (take accese, oppure solo quelle in `only`) col buffer audio caricato
-  const loadVoices = async ({ only = null, vGain = voiceGain, latOverride = lat } = {}) => {
+  const loadVoices = async ({ only = null, vGain = voiceGain, latOverride = lat, ignoreSolo = false } = {}) => {
+    if (!only && !ignoreSolo && solo.length) only = solo; // "S": si sentono solo quelle
     const list = only ? takes.filter((t) => only.includes(t.id)) : takes.filter((t) => t.included !== false);
     // buffer con l'eventuale pitch già applicato
     const withBuf = await Promise.all(list.map(async (t) => ({ ...t, buffer: engine.pitched(t.audioId, await loadTakeBuffer(t), t.pitch || 0) })));
@@ -243,7 +247,7 @@ export default function StudioPage() {
     try {
       silentSince.current = 0;
       // Per doppie e adlib senti le voci già registrate
-      const guide = recRole === 'main' ? [] : await loadVoices();
+      const guide = recRole === 'main' ? [] : await loadVoices({ ignoreSolo: true });
       recRef.current = await engine.record({ beat: beatBuf, from: startAt, beatGain: beatVol, countIn: countIn && bpm ? 4 : 0, bpm, monitor: monitor && headphones, fx, speaker: !headphones, guide });
       setModeBoth('recording');
       rafRef.current = requestAnimationFrame(tick);
@@ -361,9 +365,9 @@ export default function StudioPage() {
     setModeBoth('idle');
   };
 
-  const changeFx = (v) => {
-    setTrackStudio({ fx: v });
-    if (modeRef.current === 'playing') playFrom(Math.max(0, engine.position() || 0), { fxId: v });
+  const changeFx = (strip) => {
+    setTrackStudio({ fx: strip });
+    if (modeRef.current === 'playing') playFrom(Math.max(0, engine.position() || 0), { fxId: strip });
   };
 
   // "Segna a orecchio": parte il beat, tocchi quando inizia ogni sezione
@@ -478,15 +482,10 @@ export default function StudioPage() {
           onSeek={onSeek}
           onPlay={onPlay}
           onEdited={onEdited}
-          fx={fx}
-          changeFx={changeFx}
-          voiceDb={voiceDb}
-          setVoiceDb={setVoiceDb}
-          nudgeLat={nudgeLat}
-          curLatMs={curLatMs}
-          headphones={headphones}
-          beatVol={beatVol}
-          bpm={bpm}
+          solo={solo}
+          setSolo={setSolo}
+          onOpenFx={() => setSheet('fx')}
+          onOpenMix={() => setSheet('mix')}
           track={track}
         />
       )}
@@ -515,6 +514,7 @@ export default function StudioPage() {
         </div>
       ) : (
         <>
+          {!active && !sync && <div className="btl-label">Da dove registri? <b>Tocca il beat</b> o una riga del testo</div>}
           <BeatTimeline
             peaks={beat?.peaks}
             duration={duration}
@@ -664,6 +664,30 @@ export default function StudioPage() {
         </>
       )}
 
+      {sheet === 'fx' && <EffectsSheet fx={fx} onChange={changeFx} onPlay={onPlay} playing={mode === 'playing'} loading={mode === 'loading'} onClose={() => setSheet(null)} />}
+      {sheet === 'mix' && (
+        <MixSheet
+          takes={takes}
+          track={track}
+          engine={engine}
+          beatBuf={beatBuf}
+          loadVoices={loadVoices}
+          fx={fx}
+          bpm={bpm}
+          voiceDb={voiceDb}
+          setVoiceDb={setVoiceDb}
+          beatVol={beatVol}
+          setBeatVol={setBeatVol}
+          nudgeLat={nudgeLat}
+          curLatMs={curLatMs}
+          headphones={headphones}
+          onEdited={onEdited}
+          onPlay={onPlay}
+          playing={mode === 'playing'}
+          loading={mode === 'loading'}
+          onClose={() => setSheet(null)}
+        />
+      )}
       {sheet === 'structure' && (
         <StructureSheet
           timeline={timeline}

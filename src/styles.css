@@ -390,3 +390,60 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .mixed-time { font-size: 20px; font-weight: 700; min-width: 60px; }
 .zoom { display: flex; align-items: center; gap: 6px; }
 .zoom .btn.sm { min-width: 40px; min-height: 38px; font-size: 18px; padding: 0; }
+
+/* ---------- Montaggio a righe (stile Logic) ---------- */
+.btl-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.mix-tools { display: flex; align-items: center; gap: 6px; padding: 2px 0 8px; }
+.mix-tools .btn.sm { min-height: 36px; }
+.arr2 { flex: 1; min-height: 140px; overflow: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: 14px; background: #0a0a0c; position: relative; }
+.arr2-inner { position: relative; min-height: 100%; }
+.arr2-row { display: flex; height: 54px; border-bottom: 1px solid var(--border); }
+.arr2-row.ruler { height: 26px; position: sticky; top: 0; z-index: 6; background: #0a0a0c; }
+.arr2-row.beat { height: 40px; }
+.arr2-row .lab { position: sticky; left: 0; z-index: 5; width: 96px; flex: none; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 6px 0 8px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); cursor: pointer; }
+.arr2-row .lab.corner { z-index: 7; }
+.arr2-row.take.sel .lab { background: #24242a; color: #fff; }
+.lab.role-main { box-shadow: inset 3px 0 0 #4c9aff; }
+.lab.role-double { box-shadow: inset 3px 0 0 #b26cf5; }
+.lab.role-adlib { box-shadow: inset 3px 0 0 #f5a524; }
+.lab-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: inherit; }
+.ms { display: flex; gap: 4px; }
+.ms button { width: 26px; height: 20px; border-radius: 4px; border: 1px solid #3a3a42; background: #1a1a1f; color: #9a9aa2; font-size: 10px; font-weight: 900; padding: 0; }
+.ms button.m.on { background: #4c9aff; color: #000; border-color: #4c9aff; }
+.ms button.s.on { background: #ffd23f; color: #000; border-color: #ffd23f; }
+.arr2-row .lane { position: relative; flex: none; }
+.arr2-row.ruler .lane, .arr2-row.beat .lane { cursor: pointer; }
+.arr2-row.ruler .tick { position: absolute; top: 5px; font-size: 9px; color: var(--muted); padding-left: 3px; border-left: 1px solid #333; height: 20px; font-variant-numeric: tabular-nums; }
+.arr2-row.ruler .sec { position: absolute; bottom: 2px; font-size: 9px; color: #fff; padding: 0 4px; background: #2a2a30; border-radius: 4px; transform: translateX(2px); white-space: nowrap; }
+.arr2-row.beat .lane { display: flex; align-items: center; }
+.arr2-row.beat .reg-wave rect { fill: #4a4a52; }
+.arr2-empty { padding: 16px; text-align: center; }
+.inspector2 { flex: none; min-height: 132px; display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 10px 2px 4px; }
+.insp-row { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+.insp-row .btn.sm { min-height: 36px; padding: 0 10px; font-size: 14px; flex: none; }
+.insp-val { min-width: 48px; text-align: center; font-weight: 700; font-size: 13px; }
+.insp-hint { margin: 0; text-align: center; }
+.mixed-solo { min-width: 60px; text-align: right; }
+.play-mini { width: 44px; height: 44px; border-radius: 50%; border: 0; background: #fff; color: #000; display: grid; place-items: center; flex: none; }
+.inserts { display: flex; flex-direction: column; gap: 8px; }
+.insert { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); overflow: hidden; }
+.insert.on { border-color: #4a4a55; }
+.insert-head { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 8px; }
+.power { width: 38px; height: 38px; border-radius: 50%; border: 1px solid #3a3a42; background: #141418; color: #5a5a62; font-size: 18px; flex: none; display: grid; place-items: center; }
+.insert.on .power { background: #35c46a; border-color: #35c46a; color: #000; box-shadow: 0 0 12px rgba(53, 196, 106, 0.4); }
+.insert-name { flex: 1; min-width: 0; border: 0; background: transparent; text-align: left; display: flex; flex-direction: column; padding: 2px 0; }
+.insert:not(.on) .insert-name .reco-title { color: var(--muted); }
+.insert-body { padding: 4px 12px 14px; display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--border); }
+.insert-body p { margin: 6px 0 0; }
+
+/* ---------- I 3 passi della traccia ---------- */
+.steps { display: flex; gap: 6px; background: var(--surface); border-radius: 14px; padding: 4px; }
+.step { flex: 1; min-height: 46px; border: 0; border-radius: 10px; background: transparent; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 700; color: var(--muted); font-size: 15px; }
+.step.on { background: #fff; color: #000; }
+.step-n { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; background: var(--surface-2); color: var(--text); }
+.step.on .step-n { background: #000; color: #fff; }
+.step.done:not(.on) .step-n { background: #35c46a; color: #000; }
+.step-body { padding-top: 4px; }
+.beat-pick { text-align: left; display: flex; flex-direction: column; gap: 4px; }
+.beat-pick.sel { border-color: #fff; }
+.sheet-top { position: sticky; top: -8px; z-index: 5; display: flex; align-items: center; gap: 12px; background: var(--surface); padding: 6px 0 8px; margin-top: -6px; }

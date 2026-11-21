@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDbQuery } from '../../db/useDbQuery.js';
-import { addBeat, db } from '../../db/db.js';
-import { analyzeAudio, formatBytes, guessMime, parseBeatName } from '../../lib/audio.js';
+import { db } from '../../db/db.js';
+import { importBeatFiles } from '../../lib/beatImport.js';
+import { formatBytes } from '../../lib/audio.js';
 import { formatTime, keyShort } from '../../constants.js';
 import Icon from '../../components/Icon.jsx';
 import WaveformPlayer from '../../components/WaveformPlayer.jsx';
@@ -42,32 +43,7 @@ export default function BeatPage() {
     const files = [...(e.target.files || [])];
     e.target.value = '';
     if (!files.length) return;
-    const failed = [];
-    for (let i = 0; i < files.length; i++) {
-      const f = files[i];
-      setProgress(`${i + 1} di ${files.length} · Analizzo BPM e tonalità: ${f.name}`);
-      try {
-        const a = await analyzeAudio(f);
-        const info = parseBeatName(f.name);
-        const mime = guessMime(f);
-        const blob = f.type ? f : new Blob([f], { type: mime });
-        await addBeat({
-          blob,
-          mime,
-          title: info.title,
-          producer: info.producer,
-          bpm: info.bpm ?? a.bpm ?? null,
-          key: a.key || '',
-          auto: { bpm: info.bpm == null && a.bpm != null, key: !!a.key },
-          duration: a.duration,
-          peaks: a.peaks,
-        });
-      } catch (err) {
-        failed.push(`${f.name}: formato non supportato o file danneggiato`);
-        console.error(err);
-      }
-    }
-    setProgress('');
+    const { failed } = await importBeatFiles(files, setProgress);
     setErrors(failed);
   };
 

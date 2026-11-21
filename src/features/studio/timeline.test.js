@@ -61,8 +61,30 @@ test('voci: ritardo per modalità, ruoli e take spente', async () => {
   const v = buildVoices(takes, { lat: { speaker: 0.2 } });
   assert.equal(v.length, 3); // la take spenta non suona
   assert.equal(v[0].pos, 4.8); // 5 - 0.2 (senza cuffie, misurato)
-  assert.deepEqual(v[0].active, [[5.8, 13.8]]);
+  assert.equal(v[0].active, null); // nessuna copertura automatica
   assert.equal(v[1].pos, 4.96); // 5 - 0.04 (cuffie, valore di partenza)
   assert.deepEqual([v[1].pan, v[2].pan], [-0.35, 0.35]); // doppie aperte
   assert.ok(v[1].gain < v[0].gain);
+});
+
+test('catena effetti: preset, valori mancanti, riconoscimento preset', async () => {
+  const { normalizeStrip, presetOf, FX_PRESETS } = await import('./fx.js');
+  assert.deepEqual(normalizeStrip('trap'), normalizeStrip(FX_PRESETS.trap.strip));
+  assert.equal(normalizeStrip(undefined).comp.on, true); // senza nulla: Provino
+  const custom = normalizeStrip({ comp: { threshold: -30 } });
+  assert.equal(custom.comp.threshold, -30);
+  assert.equal(custom.comp.ratio, 3.5); // il resto dai valori di base
+  assert.equal(presetOf(normalizeStrip('spazio')), 'spazio');
+  assert.equal(presetOf(custom), null); // personalizzato
+});
+
+test('nomi delle take', async () => {
+  const { takeLabels } = await import('./voices.js');
+  const L = takeLabels([
+    { id: 'a', role: 'main', audioId: 'x', createdAt: 1 },
+    { id: 'b', role: 'main', audioId: 'y', createdAt: 2 },
+    { id: 'b2', role: 'main', audioId: 'y', createdAt: 2, trimStart: 3 },
+    { id: 'c', role: 'double', audioId: 'z', createdAt: 3 },
+  ]);
+  assert.deepEqual([L.get('a'), L.get('b'), L.get('b2'), L.get('c')], ['Voce 1', 'Voce 2', 'Voce 2B', 'Doppia 1']);
 });

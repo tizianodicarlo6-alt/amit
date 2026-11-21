@@ -1,56 +1,66 @@
 // Effetti voce per il provino: livello automatico, pulizia, EQ, compressore, riverbero e delay a tempo.
 // Funziona sia in tempo reale (AudioContext) sia nell'export (OfflineAudioContext).
 
+// Catena effetti voce (come gli insert di Logic): ogni effetto ha ⏻ e i suoi controlli.
+export const DEFAULT_STRIP = {
+  eq: { on: true, lowcut: 100, mud: -2.5, presence: 3, air: 2 },
+  comp: { on: true, threshold: -22, ratio: 3.5, attack: 6, release: 180, makeup: 4 },
+  sat: { on: false, drive: 25 },
+  delay: { on: true, div: 0.5, feedback: 20, mix: 6 },
+  reverb: { on: true, size: 1.4, mix: 14 },
+};
+
+// Punti di partenza: poi si regola tutto a mano
 export const FX_PRESETS = {
   pulita: {
     label: 'Pulita',
-    hint: 'Voce naturale, solo livello e pulizia dei bassi',
-    hp: 80,
-    eq: [],
-    comp: null,
-    reverb: null,
-    delay: null,
+    hint: 'Voce naturale, solo pulizia dei bassi',
+    strip: {
+      eq: { on: true, lowcut: 80, mud: 0, presence: 0, air: 0 },
+      comp: { on: false, threshold: -20, ratio: 2, attack: 10, release: 200, makeup: 0 },
+      sat: { on: false, drive: 20 },
+      delay: { on: false, div: 0.5, feedback: 20, mix: 6 },
+      reverb: { on: false, size: 1.2, mix: 10 },
+    },
   },
-  provino: {
-    label: 'Provino',
-    hint: 'Compressa, presente, un filo di riverbero',
-    hp: 100,
-    eq: [
-      { type: 'peaking', f: 300, q: 1, g: -2.5 },
-      { type: 'peaking', f: 3500, q: 0.9, g: 3 },
-      { type: 'highshelf', f: 10000, g: 2 },
-    ],
-    comp: { threshold: -22, ratio: 3.5, attack: 0.006, release: 0.18, makeup: 1.6 },
-    reverb: { wet: 0.14, seconds: 1.4 },
-    delay: { wet: 0.06, beats: 0.5, feedback: 0.2 },
-  },
+  provino: { label: 'Provino', hint: 'Compressa, presente, un filo di riverbero', strip: DEFAULT_STRIP },
   trap: {
     label: 'Trap',
     hint: 'Molto compressa e brillante, delay a tempo',
-    hp: 120,
-    eq: [
-      { type: 'peaking', f: 250, q: 1, g: -3 },
-      { type: 'peaking', f: 4500, q: 0.8, g: 4 },
-      { type: 'highshelf', f: 11000, g: 3 },
-    ],
-    comp: { threshold: -28, ratio: 6, attack: 0.003, release: 0.12, makeup: 2.2 },
-    reverb: { wet: 0.12, seconds: 1.0 },
-    delay: { wet: 0.13, beats: 0.5, feedback: 0.3 },
+    strip: {
+      eq: { on: true, lowcut: 120, mud: -3, presence: 4, air: 3 },
+      comp: { on: true, threshold: -28, ratio: 6, attack: 3, release: 120, makeup: 7 },
+      sat: { on: true, drive: 20 },
+      delay: { on: true, div: 0.5, feedback: 30, mix: 13 },
+      reverb: { on: true, size: 1.0, mix: 12 },
+    },
   },
   spazio: {
     label: 'Spazio',
     hint: 'Riverbero ampio e delay lungo, per ritornelli e melodie',
-    hp: 100,
-    eq: [
-      { type: 'peaking', f: 300, q: 1, g: -2 },
-      { type: 'peaking', f: 3000, q: 0.9, g: 2.5 },
-      { type: 'highshelf', f: 10000, g: 2.5 },
-    ],
-    comp: { threshold: -20, ratio: 3, attack: 0.008, release: 0.2, makeup: 1.5 },
-    reverb: { wet: 0.3, seconds: 2.6 },
-    delay: { wet: 0.12, beats: 0.75, feedback: 0.35 },
+    strip: {
+      eq: { on: true, lowcut: 100, mud: -2, presence: 2.5, air: 2.5 },
+      comp: { on: true, threshold: -20, ratio: 3, attack: 8, release: 200, makeup: 3.5 },
+      sat: { on: false, drive: 20 },
+      delay: { on: true, div: 0.75, feedback: 35, mix: 12 },
+      reverb: { on: true, size: 2.6, mix: 30 },
+    },
   },
 };
+
+/** Da preset (testo) o catena salvata a catena completa (con i valori mancanti di default). */
+export function normalizeStrip(fx) {
+  const base = typeof fx === 'string' || !fx ? FX_PRESETS[fx]?.strip || DEFAULT_STRIP : fx;
+  const out = {};
+  for (const k of Object.keys(DEFAULT_STRIP)) out[k] = { ...DEFAULT_STRIP[k], ...(base[k] || {}) };
+  return out;
+}
+
+/** Quale preset corrisponde (se nessuno: "personalizzato"). */
+export function presetOf(strip) {
+  const s = JSON.stringify(normalizeStrip(strip));
+  return FX_ORDER.find((k) => JSON.stringify(normalizeStrip(k)) === s) || null;
+}
 
 export const FX_ORDER = ['pulita', 'provino', 'trap', 'spazio'];
 
@@ -122,55 +132,87 @@ function impulse(ctx, seconds) {
   return buf;
 }
 
+function satCurve(drive) {
+  const k = 1 + drive / 8;
+  const n = 2048;
+  const c = new Float32Array(n);
+  const norm = Math.tanh(k);
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1;
+    c[i] = Math.tanh(k * x) / norm;
+  }
+  return c;
+}
+
 /**
- * Crea la catena effetti nel contesto dato.
+ * Crea la catena effetti nel contesto dato (fx = catena o nome di preset).
  * Ritorna { input, output } da collegare: sorgente → input … output → destinazione.
  */
-export function buildVoiceChain(ctx, presetId = 'provino', { bpm = 0, level = 1 } = {}) {
-  const p = FX_PRESETS[presetId] || FX_PRESETS.provino;
+export function buildVoiceChain(ctx, fx = 'provino', { bpm = 0, level = 1 } = {}) {
+  const p = normalizeStrip(fx);
   const input = ctx.createGain();
   input.gain.value = level;
   const output = ctx.createGain();
-
+  const add = (n) => {
+    node.connect(n);
+    node = n;
+  };
   let node = input;
+
+  // EQ (il taglio dei bassi c'è sempre, almeno a 40 Hz)
   const hp = ctx.createBiquadFilter();
   hp.type = 'highpass';
-  hp.frequency.value = p.hp;
+  hp.frequency.value = p.eq.on ? p.eq.lowcut : 40;
   hp.Q.value = 0.7;
-  node.connect(hp);
-  node = hp;
-
-  for (const b of p.eq) {
-    const f = ctx.createBiquadFilter();
-    f.type = b.type;
-    f.frequency.value = b.f;
-    if (b.q) f.Q.value = b.q;
-    f.gain.value = b.g;
-    node.connect(f);
-    node = f;
+  add(hp);
+  if (p.eq.on) {
+    for (const [type, f, g, q] of [
+      ['peaking', 300, p.eq.mud, 1],
+      ['peaking', 3500, p.eq.presence, 0.9],
+      ['highshelf', 10000, p.eq.air, 0],
+    ]) {
+      if (!g) continue;
+      const b = ctx.createBiquadFilter();
+      b.type = type;
+      b.frequency.value = f;
+      if (q) b.Q.value = q;
+      b.gain.value = g;
+      add(b);
+    }
   }
 
-  if (p.comp) {
+  // Compressore
+  if (p.comp.on) {
     const c = ctx.createDynamicsCompressor();
     c.threshold.value = p.comp.threshold;
     c.ratio.value = p.comp.ratio;
-    c.attack.value = p.comp.attack;
-    c.release.value = p.comp.release;
+    c.attack.value = p.comp.attack / 1000;
+    c.release.value = p.comp.release / 1000;
     c.knee.value = 6;
-    const makeup = ctx.createGain();
-    makeup.gain.value = p.comp.makeup;
-    node.connect(c);
-    c.connect(makeup);
-    node = makeup;
+    add(c);
+    const mk = ctx.createGain();
+    mk.gain.value = dbToGain(p.comp.makeup);
+    add(mk);
+  }
+
+  // Saturazione
+  if (p.sat.on && p.sat.drive > 0) {
+    const ws = ctx.createWaveShaper();
+    ws.curve = satCurve(p.sat.drive);
+    ws.oversample = '2x';
+    add(ws);
+    const comp = ctx.createGain();
+    comp.gain.value = 1 / (1 + p.sat.drive / 200); // compenso il volume
+    add(comp);
   }
 
   node.connect(output); // segnale "asciutto"
 
-  if (p.reverb) {
+  if (p.reverb.on && p.reverb.mix > 0) {
     const conv = ctx.createConvolver();
-    conv.buffer = impulse(ctx, p.reverb.seconds);
+    conv.buffer = impulse(ctx, Math.round(p.reverb.size * 10) / 10);
     const wet = ctx.createGain();
-    wet.gain.value = p.reverb.wet;
+    wet.gain.value = p.reverb.mix / 100;
     const tone = ctx.createBiquadFilter();
     tone.type = 'lowpass';
     tone.frequency.value = 7000;
@@ -180,19 +222,19 @@ export function buildVoiceChain(ctx, presetId = 'provino', { bpm = 0, level = 1 
     wet.connect(output);
   }
 
-  if (p.delay) {
+  if (p.delay.on && p.delay.mix > 0) {
     const beat = bpm ? 60 / bpm : 0.5;
-    const time = Math.min(1.9, beat * p.delay.beats);
+    const time = Math.min(1.9, beat * p.delay.div);
     const d = ctx.createDelay(2);
     d.delayTime.value = time;
     const fb = ctx.createGain();
-    fb.gain.value = p.delay.feedback;
+    fb.gain.value = Math.min(0.85, p.delay.feedback / 100);
     const tone = ctx.createBiquadFilter();
     tone.type = 'bandpass';
     tone.frequency.value = 1800;
     tone.Q.value = 0.6;
     const wet = ctx.createGain();
-    wet.gain.value = p.delay.wet;
+    wet.gain.value = p.delay.mix / 100;
     node.connect(d);
     d.connect(tone);
     tone.connect(fb);
