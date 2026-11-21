@@ -2,6 +2,8 @@
 // così sappiamo esattamente dove cade la voce rispetto al beat.
 import { decodeBlob } from '../../lib/audio.js';
 import { concatChunks, encodeWav, peakOf } from '../../lib/wav.js';
+
+const SILENCE = 0.0008; // sotto questo picco la registrazione è considerata muta
 import { activeRms, buildBeatCarve, buildMaster, buildVoiceChain, levelGainFor } from './fx.js';
 
 // Processore audio che raccoglie i campioni del microfono (gira nel thread audio).
@@ -77,13 +79,28 @@ export class StudioEngine {
   }
 
   async ensureMic() {
-    if (this.stream && this.stream.getAudioTracks().some((t) => t.readyState === 'live')) return;
-    const ctx = this.unlock();
+    if (this.stream && this.stream.getAudioTracks().some((t) => t.readyState === 'live') && this.micNode) return;
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
     });
+    // Safari su iPhone: se il contesto audio è nato PRIMA del microfono, a volte registra silenzio.
+    // Lo ricreo adesso (i beat già caricati restano validi).
+    if (this.ctx && !this.ctxAfterMic) {
+      try {
+        await this.ctx.close();
+      } catch {
+        /* ignorato */
+      }
+      this.ctx = null;
+      this.workletLoaded = false;
+    }
+    const ctx = this.unlock();
+    this.ctxAfterMic = true;
     if (ctx.state !== 'running') await ctx.resume().catch(() => {});
     this.micNode = ctx.createMediaStreamSource(this.stream);
+    this.analyser = ctx.createAnalyser();
+    this.analyser.fftSize = 1024;
+    this.micNode.connect(this.analyser);
     const sink = ctx.createGain();
     sink.gain.value = 0; // il nodo deve essere collegato all'uscita per funzionare, ma muto
     sink.connect(ctx.destination);
@@ -105,8 +122,17 @@ export class StudioEngine {
     this.recNode.connect(sink);
   }
 
+  /** Livello del microfono adesso (0–1), per l'indicatore. */
+  micLevel() {
+    if (!this.analyser) return 0;
+    const buf = new Float32Array(this.analyser.fftSize);
+    this.analyser.getFloatTimeDomainData(buf);
+    return peakOf(buf);
+  }
+
   releaseMic() {
     try {
+      this.monitor?.disconnect();
       this.micNode?.disconnect();
       this.recNode?.disconnect();
     } catch {
@@ -223,12 +249,36 @@ export class StudioEngine {
   }
 
   /** Avvia beat + registrazione. Ritorna una promessa risolta allo stop con la take. */
-  async record({ beat, from = 0, beatGain = 1, countIn = 0, bpm = 0 }) {
+  async record({ beat, from = 0, beatGain = 1, countIn = 0, bpm = 0, monitor = false, fx = 'pulita' }) {
     await this.ensureMic();
     const ctx = this.ctx;
     const chunks = [];
     let firstFrame = null;
     const node = this.recNode;
+
+    // Registrazione di riserva (MediaRecorder): se la principale esce muta uso questa
+    let mr = null;
+    const mrChunks = [];
+    let mrStart = null;
+    try {
+      if (typeof MediaRecorder !== 'undefined') {
+        const mime = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'].find((m) => MediaRecorder.isTypeSupported?.(m));
+        mr = mime ? new MediaRecorder(this.stream, { mimeType: mime }) : new MediaRecorder(this.stream);
+        mr.ondataavailable = (e) => e.data?.size && mrChunks.push(e.data);
+        mr.onstart = () => (mrStart = ctx.currentTime);
+        mr.start();
+      }
+    } catch {
+      mr = null;
+    }
+
+    // "Sentiti in cuffia": la tua voce (con l'effetto scelto) mentre registri
+    if (monitor) {
+      const chain = buildVoiceChain(ctx, fx, { bpm, level: 1.6 });
+      this.micNode.connect(chain.input);
+      chain.output.connect(ctx.destination);
+      this.monitor = chain.input;
+    }
 
     if (this.useWorklet) {
       node.port.onmessage = (e) => {
@@ -264,11 +314,41 @@ export class StudioEngine {
           });
           node.port.onmessage = null;
         } else node.onaudioprocess = null;
-        const samples = concatChunks(chunks);
-        const sr = ctx.sampleRate;
+        if (this.monitor) {
+          try {
+            this.micNode.disconnect(this.monitor);
+          } catch {
+            /* ignorato */
+          }
+          this.monitor = null;
+        }
+        if (mr && mr.state !== 'inactive') {
+          await new Promise((resolve) => {
+            mr.onstop = resolve;
+            mr.stop();
+            setTimeout(resolve, 1500);
+          });
+        }
+        let samples = concatChunks(chunks);
+        let sr = ctx.sampleRate;
         // offset: posizione (nel tempo del beat) del primo campione registrato
-        const offset = from + ((firstFrame ?? beatStartFrame) - beatStartFrame) / sr;
-        return { samples, sr, offset, duration: samples.length / sr };
+        let offset = from + ((firstFrame ?? beatStartFrame) - beatStartFrame) / sr;
+        let usedBackup = false;
+        if (peakOf(samples) < SILENCE && mrChunks.length) {
+          try {
+            const buf = await decodeBlob(ctx, new Blob(mrChunks, { type: mr.mimeType || mrChunks[0].type }));
+            const alt = new Float32Array(buf.getChannelData(0));
+            if (peakOf(alt) >= SILENCE) {
+              samples = alt;
+              sr = buf.sampleRate;
+              offset = from + ((mrStart ?? playing.t0) - playing.t0);
+              usedBackup = true;
+            }
+          } catch {
+            /* resta la principale */
+          }
+        }
+        return { samples, sr, offset, duration: samples.length / sr, silent: peakOf(samples) < SILENCE, usedBackup };
       },
     };
   }

@@ -42,6 +42,22 @@ export default function StudioSettings(p) {
             ))}
           </div>
         </div>
+        <div className="field">
+          <span className="field-label">Quando scegli una strofa, parti…</span>
+          <div className="chips">
+            {[2, 5, 10].map((v) => (
+              <button key={v} className={`chip${p.preRoll === v ? ' on' : ''}`} onClick={() => p.setPreRoll(v)}>
+                {v} s prima
+              </button>
+            ))}
+          </div>
+        </div>
+        <label className="check">
+          <input type="checkbox" checked={p.monitor} onChange={(e) => p.setMonitor(e.target.checked)} />
+          <span>
+            Sentiti in cuffia mentre registri<span className="muted small"> — solo con le cuffie! Con gli AirPods arriva in ritardo.</span>
+          </span>
+        </label>
         <label className="check">
           <input type="checkbox" checked={p.countIn} onChange={(e) => p.setCountIn(e.target.checked)} />
           <span>

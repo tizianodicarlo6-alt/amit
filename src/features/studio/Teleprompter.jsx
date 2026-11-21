@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { formatTime } from '../../constants.js';
 
 // Il "gobbo": testo grande, riga corrente evidenziata, scorre da solo a tempo.
-export default function Teleprompter({ timeline, current, following, onPickLine, selectedLine, fontSize = 24, overlay }) {
+export default function Teleprompter({ timeline, current, following, onPickLine, onPickSection, selectedLine, fontSize = 24, overlay }) {
   const { lines, blocks } = timeline;
   const refs = useRef(new Map());
 
@@ -32,7 +32,7 @@ export default function Teleprompter({ timeline, current, following, onPickLine,
         <div className="prompter-pad" />
         {blocks.map((b) => (
           <div key={b.id} className="prompter-block">
-            <button className="prompter-label" onClick={() => onPickLine?.(b.first)}>
+            <button className="prompter-label" onClick={() => (onPickSection ? onPickSection(b) : onPickLine?.(b.first))}>
               {b.label} <span>· {formatTime(b.start)}</span>
             </button>
             {lines.slice(b.first, b.first + b.count).map((l) => (

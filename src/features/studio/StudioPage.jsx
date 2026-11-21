@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useDbQuery } from '../../db/useDbQuery.js';
 import { addTake, db, updateTrack } from '../../db/db.js';
-import { keyShort } from '../../constants.js';
+import { formatTime, keyShort } from '../../constants.js';
 import Icon from '../../components/Icon.jsx';
 import { usePref } from '../../components/usePref.js';
 import { micErrorMessage } from '../../components/useRecorder.js';
@@ -40,7 +40,9 @@ export default function StudioPage() {
   const [error, setError] = useState('');
   const [flash, setFlash] = useState('');
   const [selectedTake, setSelectedTake] = useState(null);
-  const [startAt, setStartAt] = useState(0); // da dove partono beat e registrazione
+  const [startPick, setStartPick] = useState(null); // partenza scelta a mano (null = automatica)
+  const [level, setLevel] = useState(0); // livello microfono mentre registri
+  const silentSince = useRef(0);
   const [selectedLine, setSelectedLine] = useState(null);
   const [sheet, setSheet] = useState(null); // 'takes' | 'settings' | 'structure'
   const [sync, setSync] = useState(null); // { queue: [blockId...], marked: n } durante "Segna a orecchio"
@@ -48,7 +50,9 @@ export default function StudioPage() {
   const rafRef = useRef(0);
 
   // Impostazioni salvate sul telefono
-  const [countIn, setCountIn] = usePref('studio.countIn', true);
+  const [countIn, setCountIn] = usePref('studio.countIn2', false);
+  const [preRoll, setPreRoll] = usePref('studio.preRoll', 5);
+  const [monitor, setMonitor] = usePref('studio.monitor', false);
   const [latencyMs, setLatencyMs] = usePref('studio.latencyMs', null);
   const [beatVol, setBeatVol] = usePref('studio.beatVol', 0.8);
   const [voiceDb, setVoiceDb] = usePref('studio.voiceDb', 2);
@@ -56,6 +60,7 @@ export default function StudioPage() {
   const [tipSeen, setTipSeen] = usePref('studio.headphonesTip', false);
 
   const voiceGain = dbToGain(voiceDb);
+  const duration = beatBuf?.duration || beat?.duration || 0;
   const latency = (latencyMs ?? Math.round(engine.estimatedLatency() * 1000)) / 1000;
   const bpm = Number(track?.bpm) || Number(beat?.bpm) || 0;
   const beatDur = bpm ? 60 / bpm : 0.6;
@@ -71,6 +76,11 @@ export default function StudioPage() {
   const setTrackStudio = (changes) => updateTrack(id, { studio: { ...st, fx, barsPerLine, ...changes } });
 
   const timeline = useMemo(() => buildTimeline(track?.sections, { starts, attack, barDur, barsPerLine }), [track?.sections, starts, attack, barDur, barsPerLine]);
+  // Partenza automatica: qualche secondo prima della prima sezione scritta
+  const firstBlock = timeline.blocks[0];
+  const autoStart = firstBlock ? Math.max(0, firstBlock.start - preRoll) : 0;
+  const startAt = startPick ?? autoStart;
+  const setStartAt = setStartPick;
 
   const setModeBoth = (m) => {
     modeRef.current = m;
@@ -146,7 +156,13 @@ export default function StudioPage() {
       recRef.current = null;
       try {
         const r = await handle.stop();
+        setLevel(0);
         if (r.duration < 0.5) {
+          setModeBoth('idle');
+          return;
+        }
+        if (r.silent) {
+          setError('La registrazione è muta: il microfono non ha catturato niente. Controlla il permesso microfono (Impostazioni → Safari → Microfono) e che le cuffie col microfono siano collegate bene, poi riprova.');
           setModeBoth('idle');
           return;
         }
@@ -172,6 +188,12 @@ export default function StudioPage() {
     if (p == null) return;
     setPos(p);
     setPre(engine.countInLeft());
+    if (modeRef.current === 'recording') {
+      const lv = engine.micLevel();
+      setLevel((prev) => Math.max(lv, prev * 0.9)); // scende piano, così si legge
+      if (lv > 0.0005) silentSince.current = 0;
+      else if (!silentSince.current) silentSince.current = performance.now();
+    }
     const end = engine.playing?.length ?? 0;
     if (p > end + 0.3) {
       stopAll();
@@ -187,7 +209,8 @@ export default function StudioPage() {
     setError('');
     setModeBoth('starting');
     try {
-      recRef.current = await engine.record({ beat: beatBuf, from: startAt, beatGain: beatVol, countIn: countIn && bpm ? 4 : 0, bpm });
+      silentSince.current = 0;
+      recRef.current = await engine.record({ beat: beatBuf, from: startAt, beatGain: beatVol, countIn: countIn && bpm ? 4 : 0, bpm, monitor, fx });
       setModeBoth('recording');
       rafRef.current = requestAnimationFrame(tick);
     } catch (e) {
@@ -229,17 +252,38 @@ export default function StudioPage() {
     setSelectedLine(null);
   };
 
-  // Tocco su una riga/sezione: parto 1 battuta prima
+  // Tocco su una riga/sezione: parto qualche secondo prima (di default 5 s)
   const onPickLine = (i) => {
     if (modeRef.current !== 'idle') return;
     if (selectedLine === i) {
       setSelectedLine(null);
-      setStartAt(0);
-      setPos(0);
+      setStartAt(null);
       return;
     }
-    const t = Math.max(0, timeline.lines[i].time - barDur);
+    const t = Math.max(0, timeline.lines[i].time - preRoll);
     setSelectedLine(i);
+    setStartAt(t);
+    setPos(t);
+  };
+
+  // Mentre suona il beat: tocco il nome di una sezione = "questa sezione parte adesso"
+  const onMarkSection = (blockId) => {
+    if (modeRef.current !== 'playing') return false;
+    const p = Math.max(0, (engine.position() ?? 0) - 0.08);
+    const isFirst = timeline.blocks[0]?.id === blockId;
+    if (isFirst) {
+      const next = { ...starts };
+      delete next[blockId];
+      setTrackStudio({ attack: Math.round(p * 100) / 100, starts: next, introBars: null });
+    } else setTrackStudio({ starts: { ...starts, [blockId]: snapToBeat(p, attack, beatDur) } });
+    const b = timeline.blocks.find((x) => x.id === blockId);
+    setFlash(`${b?.label} parte qui ✓`);
+    return true;
+  };
+
+  const nudgeStart = (d) => {
+    const t = Math.max(0, Math.min(duration - 1, startAt + d));
+    setSelectedLine(null);
     setStartAt(t);
     setPos(t);
   };
@@ -277,9 +321,9 @@ export default function StudioPage() {
   if (!track) return <div className="page empty">Traccia non trovata.</div>;
 
   const active = mode === 'recording' || mode === 'playing';
+  const micSilent = mode === 'recording' && silentSince.current && performance.now() - silentSince.current > 2500 && pre <= 0.02;
   const counting = active && pre > 0.02;
   const current = active && !sync && !counting ? lineAt(pos, timeline) : -1;
-  const duration = beatBuf?.duration || beat?.duration || 0;
   const take = takes.find((t) => t.id === selectedTake);
   const syncLabel = sync ? timeline.blocks.find((b) => b.id === sync.queue[0])?.label : null;
 
@@ -370,17 +414,66 @@ export default function StudioPage() {
         </div>
       )}
 
-      <Teleprompter timeline={timeline} current={current} following={active} selectedLine={selectedLine} fontSize={fontSize} onPickLine={onPickLine} overlay={overlay} />
+      <Teleprompter
+        timeline={timeline}
+        current={current}
+        following={active}
+        selectedLine={selectedLine}
+        fontSize={fontSize}
+        onPickLine={onPickLine}
+        onPickSection={(b) => onMarkSection(b.id) || onPickLine(b.first)}
+        overlay={overlay}
+      />
+
+      {mode === 'recording' && (
+        <div className={`meter${micSilent ? ' silent' : ''}`}>
+          <span className="fx-label">Microfono</span>
+          <div className="meter-bar">
+            <div style={{ width: `${Math.min(100, Math.sqrt(level) * 140)}%` }} />
+          </div>
+          {micSilent && <span className="small error">non sento niente!</span>}
+        </div>
+      )}
+
+      {!active && !sync && beatBuf && (
+        <div className="startbar">
+          <div className="grow min0">
+            <div className="fx-label">Partenza</div>
+            <div className="small ellipsis">
+              <b className="mono">{formatTime(startAt)}</b>
+              <span className="muted">
+                {' '}
+                {startPick == null
+                  ? firstBlock
+                    ? `· ${preRoll} s prima di ${firstBlock.label}`
+                    : '· inizio beat'
+                  : selectedLine != null
+                    ? `· ${preRoll} s prima della riga scelta`
+                    : '· scelta da te'}
+              </span>
+            </div>
+          </div>
+          <button className="btn sm" onClick={() => (setSelectedLine(null), setStartAt(0), setPos(0))}>
+            Inizio
+          </button>
+          <button className="btn sm" onClick={() => nudgeStart(-5)}>
+            −5 s
+          </button>
+          <button className="btn sm" onClick={() => nudgeStart(5)}>
+            +5 s
+          </button>
+        </div>
+      )}
 
       <div className="studio-hint muted small">
         {sync
           ? ''
-          : active
-            ? ''
-            : selectedLine != null
-              ? `Parti da qui (1 battuta prima). Tocca di nuovo la riga per tornare all'inizio.`
+          : mode === 'playing'
+            ? 'Tocca il nome di una sezione quando inizia, per segnarla'
+            : active
+              ? ''
               : timeline.lines.length
-                ? 'Tocca una riga o una sezione per partire da lì · tocca la forma d\'onda per spostarti'
+                ? 'Tocca una riga o una sezione per partire da lì · tocca la forma d\'onda per scegliere il punto'
                 : ''}
       </div>
 
@@ -498,6 +591,10 @@ export default function StudioPage() {
           onClose={() => setSheet(null)}
           countIn={countIn}
           setCountIn={setCountIn}
+          preRoll={preRoll}
+          setPreRoll={setPreRoll}
+          monitor={monitor}
+          setMonitor={setMonitor}
           latencyMs={Math.round(latency * 1000)}
           setLatencyMs={setLatencyMs}
           beatVol={beatVol}
