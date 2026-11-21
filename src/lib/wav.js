@@ -56,3 +56,31 @@ export function peakOf(samples) {
   }
   return p;
 }
+
+/**
+ * Dove c'è davvero voce in una registrazione (secondi dall'inizio): salta il silenzio
+ * e il respiro prima di attaccare. Ritorna { start, end }.
+ */
+export function voicedBounds(samples, sr) {
+  const win = Math.max(1, Math.round(sr * 0.05));
+  const rms = [];
+  for (let i = 0; i < samples.length; i += win) {
+    let s = 0;
+    const end = Math.min(samples.length, i + win);
+    for (let j = i; j < end; j++) s += samples[j] * samples[j];
+    rms.push(Math.sqrt(s / (end - i)));
+  }
+  if (!rms.length) return { start: 0, end: 0 };
+  const sorted = [...rms].sort((a, b) => a - b);
+  const p90 = sorted[Math.floor(sorted.length * 0.9)];
+  const thr = Math.max(0.015, p90 * 0.25);
+  const first = rms.findIndex((v) => v > thr);
+  if (first < 0) return { start: 0, end: 0 };
+  let last = rms.length - 1;
+  while (last > first && rms[last] <= thr) last--;
+  const dur = samples.length / sr;
+  return {
+    start: Math.max(0, first * 0.05 - 0.15),
+    end: Math.min(dur, (last + 1) * 0.05 + 0.3),
+  };
+}

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import Sheet from '../../components/Sheet.jsx';
 import Icon from '../../components/Icon.jsx';
 import { deleteTake, updateTake } from '../../db/db.js';
-import { formatDate, formatTime } from '../../constants.js';
+import { formatDate, formatTime, roleLabel } from '../../constants.js';
 import { STUDIO, bookingLink } from '../../config.js';
 import { FX_PRESETS } from './fx.js';
 
@@ -84,9 +84,13 @@ function ExportRow({ icon, title, subtitle, prepare, primary }) {
   );
 }
 
-export default function TakesSheet({ track, beatBuf, takes, selected, onSelect, onPlay, engine, loadTakeBuffer, latency, beatVol, voiceVol, fx, bpm, onClose }) {
+const ROLE_ORDER = ['main', 'double', 'adlib'];
+const nextRole = (r) => ROLE_ORDER[(ROLE_ORDER.indexOf(r || 'main') + 1) % ROLE_ORDER.length];
+
+export default function TakesSheet({ track, beatBuf, takes, selected, onSelect, onPlay, engine, loadVoices, beatVol, fx, bpm, onClose }) {
   const take = takes.find((t) => t.id === selected);
   const base = slug(track.title);
+  const onCount = takes.filter((t) => t.included !== false).length;
 
   const remove = async (t) => {
     if (!confirm(`Eliminare "${t.name}"?`)) return;
@@ -94,78 +98,106 @@ export default function TakesSheet({ track, beatBuf, takes, selected, onSelect, 
   };
 
   const prepMix = async () => {
-    const voice = { buffer: await loadTakeBuffer(take), offset: take.offset };
-    const blob = await engine.renderMix({ beat: beatBuf, voice, latency, beatGain: beatVol, voiceGain: voiceVol, fx, bpm });
-    return [new File([blob], `${base} - provino (${take.name}).wav`, { type: 'audio/wav' })];
+    const voices = await loadVoices();
+    if (!voices.length) throw new Error('nessuna take accesa nel mix');
+    const blob = await engine.renderMix({ beat: beatBuf, voices, beatGain: beatVol, fx, bpm });
+    return [new File([blob], `${base} - provino.wav`, { type: 'audio/wav' })];
   };
   const prepVoice = async () => {
-    const voice = { buffer: await loadTakeBuffer(take), offset: take.offset };
-    const blob = engine.renderVoiceAligned({ voice, latency });
-    return [new File([blob], `${base} - voce (${take.name}).wav`, { type: 'audio/wav' })];
+    const [voice] = await loadVoices({ only: [take.id] });
+    const blob = engine.renderVoiceAligned({ voice });
+    return [new File([blob], `${base} - ${take.name} (${roleLabel(take.role)}).wav`, { type: 'audio/wav' })];
   };
+
   return (
     <Sheet open onClose={onClose} title={`Take (${takes.length})`}>
       {takes.length === 0 ? (
         <p className="muted">Nessuna registrazione ancora. Premi il tasto rosso per registrare la prima take.</p>
       ) : (
-        <div className="list">
-          {takes.map((t) => (
-            <div key={t.id} className={`card take-row${t.id === selected ? ' sel' : ''}`} onClick={() => onSelect(t.id)}>
-              <button
-                className="icon-btn sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPlay(t.id);
-                }}
-                aria-label="Ascolta sul beat"
-              >
-                <Icon name="play" size={18} />
-              </button>
-              <div className="grow min0">
-                <div className="reco-title">
-                  {t.name} {t.favorite && '⭐'}
+        <>
+          <p className="muted small">
+            Tutte le take <b>accese</b> suonano insieme nel provino. Tocca il ruolo per cambiarlo (Voce → Doppia → Adlib). Se rifai la Voce solo su un pezzo,
+            la take nuova sostituisce solo quel pezzo.
+          </p>
+          <div className="list">
+            {takes.map((t) => {
+              const on = t.included !== false;
+              return (
+                <div key={t.id} className={`card take-row${t.id === selected ? ' sel' : ''}${on ? '' : ' off'}`} onClick={() => onSelect(t.id)}>
+                  <button
+                    className="icon-btn sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPlay(t);
+                    }}
+                    aria-label="Ascolta solo questa take"
+                  >
+                    <Icon name="play" size={18} />
+                  </button>
+                  <div className="grow min0">
+                    <div className="row" style={{ gap: 6 }}>
+                      <span className="reco-title">{t.name}</span>
+                      <button
+                        className="chip role-chip"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          updateTake(t.id, { role: nextRole(t.role) });
+                        }}
+                      >
+                        {roleLabel(t.role).toUpperCase()}
+                      </button>
+                    </div>
+                    <div className="muted small">
+                      {formatTime(t.duration)} · {formatDate(t.createdAt)} · {t.mode === 'headphones' ? '🎧' : '📱'}
+                    </div>
+                  </div>
+                  <button
+                    className={`btn sm${on ? ' primary' : ''}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      updateTake(t.id, { included: !on });
+                    }}
+                    aria-label={on ? 'Spegni nel mix' : 'Accendi nel mix'}
+                  >
+                    {on ? 'ON' : 'OFF'}
+                  </button>
+                  <button
+                    className="icon-btn sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      remove(t);
+                    }}
+                    aria-label="Elimina take"
+                  >
+                    <Icon name="trash" size={18} />
+                  </button>
                 </div>
-                <div className="muted small">
-                  {formatTime(t.duration)} · {formatDate(t.createdAt)}
-                </div>
-              </div>
-              <button
-                className="icon-btn sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  updateTake(t.id, { favorite: !t.favorite });
-                }}
-                aria-label={t.favorite ? 'Togli dalle preferite' : 'Segna come preferita'}
-              >
-                <span style={{ fontSize: 18, opacity: t.favorite ? 1 : 0.35 }}>⭐</span>
-              </button>
-              <button
-                className="icon-btn sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  remove(t);
-                }}
-                aria-label="Elimina take"
-              >
-                <Icon name="trash" size={18} />
-              </button>
-            </div>
-          ))}
-        </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
-      {take && beatBuf && (
+      {takes.length > 0 && beatBuf && (
         <div className="stack">
-          <h2 className="section-title">Esporta "{take.name}"</h2>
+          <h2 className="section-title">Esporta</h2>
           <ExportRow
-            key={`mix-${take.id}-${fx}`}
+            key={`mix-${fx}-${onCount}-${takes.map((t) => `${t.id}${t.included}${t.role}`).join()}`}
             primary
             icon="tracce"
             title="Salva il provino"
-            subtitle={`Beat + voce con effetto "${FX_PRESETS[fx]?.label}", in un unico file da riascoltare sul telefono.`}
+            subtitle={`Beat + ${onCount} ${onCount === 1 ? 'take accesa' : 'take accese'} con effetto "${FX_PRESETS[fx]?.label}", in un unico file.`}
             prepare={prepMix}
           />
-          <ExportRow key={`voice-${take.id}`} icon="mic" title="Solo voce" subtitle="La voce senza beat e senza effetti." prepare={prepVoice} />
+          {take && (
+            <ExportRow
+              key={`voice-${take.id}`}
+              icon="mic"
+              title={`Solo voce: ${take.name}`}
+              subtitle="Questa take senza beat e senza effetti (tocca un'altra take per cambiarla)."
+              prepare={prepVoice}
+            />
+          )}
 
           <div className="card studio-card">
             <div className="studio-text">

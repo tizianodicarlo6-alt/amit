@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useDbQuery } from '../../db/useDbQuery.js';
-import { addTake, db, updateTrack } from '../../db/db.js';
-import { formatTime, keyShort } from '../../constants.js';
+import { addTake, db, updateTake, updateTrack } from '../../db/db.js';
+import { ROLES, formatTime, keyShort, roleLabel } from '../../constants.js';
 import Icon from '../../components/Icon.jsx';
 import { usePref } from '../../components/usePref.js';
 import { micErrorMessage } from '../../components/useRecorder.js';
 import { detectAttack } from '../../lib/analysis.js';
 import { toAnalysisSamples } from '../../lib/audio.js';
+import { voicedBounds } from '../../lib/wav.js';
+import { buildVoices, takeLatency } from './voices.js';
 import { StudioEngine, takeToWav } from './engine.js';
 import Teleprompter from './Teleprompter.jsx';
 import TakesSheet from './TakesSheet.jsx';
@@ -47,6 +49,8 @@ export default function StudioPage() {
   const [sheet, setSheet] = useState(null); // 'takes' | 'settings' | 'structure'
   const [sync, setSync] = useState(null); // { queue: [blockId...], marked: n } durante "Segna a orecchio"
   const recRef = useRef(null);
+  const recRoleRef = useRef('main');
+  const headphonesRef = useRef(false);
   const rafRef = useRef(0);
 
   // Impostazioni salvate sul telefono
@@ -54,7 +58,9 @@ export default function StudioPage() {
   const [preRoll, setPreRoll] = usePref('studio.preRoll', 5);
   const [monitor, setMonitor] = usePref('studio.monitor', false);
   const [headphones, setHeadphones] = usePref('studio.headphones', false); // di default: senza cuffie
-  const [latencyMs, setLatencyMs] = usePref('studio.latencyMs', null);
+  const [latSpk, setLatSpk] = usePref('studio.lat.speaker', null); // ms misurati senza cuffie
+  const [latHp, setLatHp] = usePref('studio.lat.headphones', null); // ms con cuffie
+  const [recRole, setRecRole] = useState('main'); // cosa stai registrando: voce, doppia, adlib
   const [beatVol, setBeatVol] = usePref('studio.beatVol', 0.8);
   const [voiceDb, setVoiceDb] = usePref('studio.voiceDb', 2);
   const [fontSize, setFontSize] = usePref('studio.fontSize', 24);
@@ -62,7 +68,10 @@ export default function StudioPage() {
 
   const voiceGain = dbToGain(voiceDb);
   const duration = beatBuf?.duration || beat?.duration || 0;
-  const latency = (latencyMs ?? Math.round(engine.estimatedLatency() * 1000)) / 1000;
+  const lat = { speaker: latSpk != null ? latSpk / 1000 : undefined, headphones: latHp != null ? latHp / 1000 : undefined };
+  const curMode = headphones ? 'headphones' : 'speaker';
+  const curLatMs = Math.round(takeLatency({ mode: curMode }, lat) * 1000);
+  const setCurLat = (ms) => (curMode === 'speaker' ? setLatSpk(ms) : setLatHp(ms));
   const bpm = Number(track?.bpm) || Number(beat?.bpm) || 0;
   const beatDur = bpm ? 60 / bpm : 0.6;
   const barDur = beatDur * 4;
@@ -134,16 +143,19 @@ export default function StudioPage() {
     return () => clearTimeout(t);
   }, [flash]);
 
-  // Volume voce dal vivo
-  useEffect(() => {
-    engine.setGains({ voiceGain, beatGain: beatVol });
-  }, [engine, voiceGain, beatVol]);
 
   const loadTakeBuffer = async (take) => {
     if (engine.buffers.has(take.audioId)) return engine.buffers.get(take.audioId);
     const rec = await db.audio.get(take.audioId);
     if (!rec?.blob) throw new Error('Registrazione non trovata');
     return engine.loadBuffer(take.audioId, rec.blob);
+  };
+
+  // Voci da mixare (take accese, oppure solo quelle in `only`) col buffer audio caricato
+  const loadVoices = async ({ only = null, vGain = voiceGain, latOverride = lat } = {}) => {
+    const list = only ? takes.filter((t) => only.includes(t.id)) : takes.filter((t) => t.included !== false);
+    const withBuf = await Promise.all(list.map(async (t) => ({ ...t, buffer: await loadTakeBuffer(t) })));
+    return buildVoices(withBuf, { lat: latOverride, voiceGain: vGain, only });
   };
 
   const stopAll = useCallback(async () => {
@@ -168,12 +180,24 @@ export default function StudioPage() {
           return;
         }
         const blob = takeToWav(r.samples, r.sr);
-        const saved = await addTake({ trackId: id, beatId, blob, offset: r.offset, duration: r.duration, sr: r.sr });
+        const bounds = voicedBounds(r.samples, r.sr);
+        const saved = await addTake({
+          trackId: id,
+          beatId,
+          blob,
+          offset: r.offset,
+          duration: r.duration,
+          sr: r.sr,
+          role: recRoleRef.current,
+          mode: headphonesRef.current ? 'headphones' : 'speaker',
+          voiceStart: bounds.start,
+          voiceEnd: bounds.end,
+        });
         const ab = engine.ctx.createBuffer(1, r.samples.length, r.sr);
         ab.copyToChannel(r.samples, 0);
         engine.buffers.set(saved.audioId, ab);
         setSelectedTake(saved.id);
-        setFlash('Take salvata ✓ · tocca Ascolta');
+        setFlash(`${roleLabel(recRoleRef.current)} salvata ✓ · tocca Ascolta`);
       } catch (e) {
         setError(`Non sono riuscito a salvare la registrazione (${e?.message || e}).`);
       }
@@ -210,9 +234,13 @@ export default function StudioPage() {
     engine.unlock(); // dentro il tocco: necessario su iPhone
     setError('');
     setModeBoth('starting');
+    recRoleRef.current = recRole;
+    headphonesRef.current = headphones;
     try {
       silentSince.current = 0;
-      recRef.current = await engine.record({ beat: beatBuf, from: startAt, beatGain: beatVol, countIn: countIn && bpm ? 4 : 0, bpm, monitor: monitor && headphones, fx, speaker: !headphones });
+      // Per doppie e adlib senti le voci già registrate
+      const guide = recRole === 'main' ? [] : await loadVoices();
+      recRef.current = await engine.record({ beat: beatBuf, from: startAt, beatGain: beatVol, countIn: countIn && bpm ? 4 : 0, bpm, monitor: monitor && headphones, fx, speaker: !headphones, guide });
       setModeBoth('recording');
       rafRef.current = requestAnimationFrame(tick);
     } catch (e) {
@@ -223,18 +251,17 @@ export default function StudioPage() {
   };
 
   // Riascolto col lettore normale dell'iPhone (suona sempre, anche col silenzioso)
-  const playFrom = async (from, { takeId = selectedTake, fxId = fx, beatOnly = false, vGain = voiceGain } = {}) => {
+  const playFrom = async (from, { only = null, fxId = fx, beatOnly = false, vGain = voiceGain, latOverride = lat } = {}) => {
     if (!beatBuf || !beat) return;
     engine.primePlayer(); // dentro il tocco: sblocca il lettore
     cancelAnimationFrame(rafRef.current);
     engine.stop();
     setError('');
-    const take = beatOnly ? null : takes.find((t) => t.id === takeId);
     setModeBoth('loading');
     try {
-      if (take) {
-        const voice = { buffer: await loadTakeBuffer(take), offset: take.offset };
-        await engine.playMixMedia({ beat: beatBuf, voice, from, beatGain: beatVol, voiceGain: vGain, latency, bpm, fx: fxId });
+      const voices = beatOnly ? [] : await loadVoices({ only, vGain, latOverride });
+      if (voices.length) {
+        await engine.playMixMedia({ beat: beatBuf, voices, from, beatGain: beatVol, bpm, fx: fxId });
       } else {
         await engine.playBeatMedia(beat.audioId, from, beatBuf.duration);
       }
@@ -266,11 +293,6 @@ export default function StudioPage() {
   // Tocco su una riga/sezione: parto qualche secondo prima (di default 5 s)
   const onPickLine = (i) => {
     if (modeRef.current !== 'idle') return;
-    if (selectedLine === i) {
-      setSelectedLine(null);
-      setStartAt(null);
-      return;
-    }
     const t = Math.max(0, timeline.lines[i].time - preRoll);
     setSelectedLine(i);
     setStartAt(t);
@@ -297,6 +319,34 @@ export default function StudioPage() {
     setSelectedLine(null);
     setStartAt(t);
     setPos(t);
+  };
+
+  // Ritardo voce: −/+ a orecchio (rifà il mix se sta suonando)
+  const nudgeLat = (d) => {
+    const ms = Math.max(0, Math.min(600, curLatMs + d));
+    setCurLat(ms);
+    if (modeRef.current === 'playing') playFrom(Math.max(0, engine.position() || 0), { latOverride: { ...lat, [curMode]: ms / 1000 } });
+  };
+
+  // Misura automatica del ritardo (altoparlante → microfono)
+  const onCalibrate = async () => {
+    if (modeRef.current !== 'idle') return;
+    engine.unlock();
+    setError('');
+    setModeBoth('starting');
+    setFlash('Misuro… stai in silenzio 3 secondi');
+    try {
+      const v = await engine.calibrate();
+      if (v == null) setError('Misura non riuscita: alza il volume, stai in silenzio e riprova. Puoi anche regolare a orecchio con − e +.');
+      else {
+        setLatSpk(Math.round(v * 1000));
+        setFlash(`Ritardo misurato: ${Math.round(v * 1000)} ms ✓`);
+      }
+    } catch (e) {
+      setError(micErrorMessage(e));
+    }
+    await engine.endMicSession();
+    setModeBoth('idle');
   };
 
   const changeFx = (v) => {
@@ -335,7 +385,6 @@ export default function StudioPage() {
   const micSilent = mode === 'recording' && silentSince.current && performance.now() - silentSince.current > 2500 && pre <= 0.02;
   const counting = active && pre > 0.02;
   const current = active && !sync && !counting ? lineAt(pos, timeline) : -1;
-  const take = takes.find((t) => t.id === selectedTake);
   const syncLabel = sync ? timeline.blocks.find((b) => b.id === sync.queue[0])?.label : null;
 
   // Conto alla rovescia durante intro e pause
@@ -492,7 +541,7 @@ export default function StudioPage() {
             ? 'Tocca il nome di una sezione quando inizia, per segnarla'
             : active
               ? ''
-              : timeline.lines.length
+              : timeline.lines.length && !takes.length
                 ? 'Tocca una riga o una sezione per partire da lì · tocca la forma d\'onda per scegliere il punto'
                 : ''}
       </div>
@@ -536,19 +585,33 @@ export default function StudioPage() {
               {voiceDb} dB
             </span>
           </label>
+          {(mode === 'playing' || mode === 'loading') && (
+          <div className="vol-row">
+            <span className="fx-label">Voce in ritardo? {headphones ? '🎧' : '📱'}</span>
+            <button className="btn sm" onClick={() => nudgeLat(-10)} aria-label="Meno ritardo">
+              −
+            </button>
+            <span className="small vol-val mono">{curLatMs} ms</span>
+            <button className="btn sm" onClick={() => nudgeLat(10)} aria-label="Più ritardo">
+              +
+            </button>
+          </div>
+          )}
         </div>
       )}
 
       {!active && !sync && mode !== 'loading' && (
         <div className="hp-row">
-          <div className="segmented" role="radiogroup" aria-label="Come registri">
-            <button role="radio" aria-checked={!headphones} className={!headphones ? 'on' : ''} onClick={() => setHeadphones(false)}>
-              📱 Senza cuffie
-            </button>
-            <button role="radio" aria-checked={headphones} className={headphones ? 'on' : ''} onClick={() => setHeadphones(true)}>
-              🎧 Con cuffie
-            </button>
+          <div className="segmented" role="radiogroup" aria-label="Cosa registri">
+            {ROLES.map((ro) => (
+              <button key={ro.id} role="radio" aria-checked={recRole === ro.id} className={recRole === ro.id ? 'on' : ''} onClick={() => setRecRole(ro.id)}>
+                {ro.label}
+              </button>
+            ))}
           </div>
+          <button className={`btn sm hp-toggle${headphones ? ' on' : ''}`} onClick={() => setHeadphones(!headphones)} aria-label="Cuffie sì o no">
+            {headphones ? '🎧 Cuffie' : '📱 No cuffie'}
+          </button>
         </div>
       )}
 
@@ -569,7 +632,7 @@ export default function StudioPage() {
           </button>
           <button className="t-btn" onClick={onPlay} disabled={!beatBuf || mode === 'recording' || mode === 'starting' || mode === 'saving' || mode === 'loading'}>
             {mode === 'loading' ? <span className="spinner" /> : <Icon name={mode === 'playing' ? 'stop' : 'play'} size={26} />}
-            <span>{mode === 'loading' ? 'Preparo…' : mode === 'playing' ? 'Stop' : take ? 'Ascolta' : 'Beat'}</span>
+            <span>{mode === 'loading' ? 'Preparo…' : mode === 'playing' ? 'Stop' : takes.some((t) => t.included !== false) ? 'Ascolta' : 'Beat'}</span>
           </button>
           <button
             className={`rec-main${mode === 'recording' ? ' on' : ''}`}
@@ -597,16 +660,16 @@ export default function StudioPage() {
           takes={takes}
           selected={selectedTake}
           onSelect={setSelectedTake}
-          onPlay={(tid) => {
-            setSelectedTake(tid);
+          onPlay={(t) => {
+            // ascolta solo questa take sul beat, da poco prima che attacchi
+            setSelectedTake(t.id);
             setSheet(null);
-            playFrom(startAt, { takeId: tid });
+            const from = Math.max(0, t.offset - takeLatency(t, lat) + (t.voiceStart || 0) - 2);
+            playFrom(from, { only: [t.id] });
           }}
           engine={engine}
-          loadTakeBuffer={loadTakeBuffer}
-          latency={latency}
+          loadVoices={loadVoices}
           beatVol={beatVol}
-          voiceVol={voiceGain}
           fx={fx}
           bpm={bpm}
           onClose={() => setSheet(null)}
@@ -642,8 +705,14 @@ export default function StudioPage() {
           setMonitor={setMonitor}
           headphones={headphones}
           setHeadphones={setHeadphones}
-          latencyMs={Math.round(latency * 1000)}
-          setLatencyMs={setLatencyMs}
+          latSpk={Math.round(takeLatency({ mode: 'speaker' }, lat) * 1000)}
+          latHp={Math.round(takeLatency({ mode: 'headphones' }, lat) * 1000)}
+          setLatSpk={setLatSpk}
+          setLatHp={setLatHp}
+          onCalibrate={() => {
+            setSheet(null);
+            onCalibrate();
+          }}
           beatVol={beatVol}
           setBeatVol={setBeatVol}
           fontSize={fontSize}

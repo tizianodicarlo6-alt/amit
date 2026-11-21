@@ -60,3 +60,11 @@ export const keyShort = (id) => {
   const k = parseKeyId(id);
   return k ? `${k.id} · ${k.camelot}` : id || '';
 };
+
+// Ruoli delle take nello studio
+export const ROLES = [
+  { id: 'main', label: 'Voce', short: 'VOCE' },
+  { id: 'double', label: 'Doppia', short: 'DOPPIA' },
+  { id: 'adlib', label: 'Adlib', short: 'ADLIB' },
+];
+export const roleLabel = (id) => ROLES.find((r) => r.id === (id || 'main'))?.label || 'Voce';

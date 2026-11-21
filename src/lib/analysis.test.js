@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { detectBpm, detectKey, parseKeyId } from './analysis.js';
 
 const SR = 11025;
+// numeri "casuali" ma sempre uguali, così i test sono ripetibili
+let seed = 12345;
+const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 const midi = (n) => 440 * 2 ** ((n - 69) / 12);
 
 // Beat sintetico: cassa e rullante a tempo, hi-hat in ottavi (hats=2) o sedicesimi (hats=4).
@@ -15,9 +18,9 @@ function drums(bpm, secs = 30, hats = 2) {
     const isSnare = i % (2 * hats) === hats;
     for (let j = 0; j < SR * 0.12 && s0 + j < out.length; j++) {
       const tt = j / SR;
-      let v = (Math.random() * 2 - 1) * Math.exp(-tt * 120) * 0.15; // hi-hat
+      let v = (rnd() * 2 - 1) * Math.exp(-tt * 120) * 0.15; // hi-hat
       if (isKick) v += Math.sin(2 * Math.PI * 55 * tt) * Math.exp(-tt * 25);
-      if (isSnare) v += (Math.random() * 2 - 1) * Math.exp(-tt * 30) * 0.6;
+      if (isSnare) v += (rnd() * 2 - 1) * Math.exp(-tt * 30) * 0.6;
       out[s0 + j] += v;
     }
   }

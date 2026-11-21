@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react';
 import { useTapTempo } from '../../components/useTapTempo.js';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useDbQuery } from '../../db/useDbQuery.js';
-import { db, deleteTrack, updateIdea, updateTrack } from '../../db/db.js';
-import { STATUSES } from '../../constants.js';
+import { db, deleteTake, deleteTrack, updateIdea, updateTake, updateTrack } from '../../db/db.js';
+import { STATUSES, formatDate, formatTime, roleLabel } from '../../constants.js';
+import AudioPlayer from '../../components/AudioPlayer.jsx';
 import Icon from '../../components/Icon.jsx';
 import Sheet from '../../components/Sheet.jsx';
 import { useAutosave, SaveStatus } from '../../components/useAutosave.jsx';
@@ -111,6 +112,46 @@ function TrackDetails({ track, projects, beats }) {
         <span className="field-label">Note</span>
         <textarea className="input" rows={4} value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Riferimenti, beat, featuring, idee per il flow…" />
       </label>
+    </div>
+  );
+}
+
+// Le registrazioni dello studio: ascolto (solo voce) ed eliminazione
+function TrackTakes({ track }) {
+  const takes = useDbQuery(() => db.takes.where('trackId').equals(track.id).reverse().sortBy('createdAt'), [track.id], []) || [];
+  const remove = async (t) => {
+    if (confirm(`Eliminare "${t.name}" (${roleLabel(t.role)})?`)) await deleteTake(t.id);
+  };
+  return (
+    <div className="stack">
+      <div className="row between">
+        <span className="field-label">Registrazioni ({takes.length})</span>
+        <Link to={`/studio/${track.id}`} className="see-all">
+          Apri lo studio
+        </Link>
+      </div>
+      {takes.length === 0 && <p className="muted small">Nessuna registrazione. Apri lo Studio e premi il tasto rosso.</p>}
+      {takes.map((t) => (
+        <div key={t.id} className={`card stack take-card${t.included === false ? ' off' : ''}`}>
+          <div className="row between">
+            <div className="min0">
+              <span className="reco-title">{t.name}</span> <span className="badge" style={{ '--c': '#8f8f98' }}>{roleLabel(t.role)}</span>
+              <div className="muted small">
+                {formatTime(t.duration)} · {formatDate(t.createdAt)} {t.included === false ? '· spenta nel mix' : ''}
+              </div>
+            </div>
+            <div className="row" style={{ gap: 4 }}>
+              <button className={`btn sm${t.included !== false ? ' primary' : ''}`} onClick={() => updateTake(t.id, { included: t.included === false })}>
+                {t.included !== false ? 'ON' : 'OFF'}
+              </button>
+              <button className="icon-btn sm" onClick={() => remove(t)} aria-label="Elimina registrazione">
+                <Icon name="trash" size={18} />
+              </button>
+            </div>
+          </div>
+          <AudioPlayer audioId={t.audioId} duration={t.duration} />
+        </div>
+      ))}
     </div>
   );
 }
@@ -229,6 +270,8 @@ export default function TracciaPage() {
       {tab === 'dettagli' && (
         <>
           <TrackDetails key={track.id} track={track} projects={projects} beats={beats} />
+          <div className="divider" />
+          <TrackTakes track={track} />
           <button className="btn danger" onClick={remove}>
             <Icon name="trash" size={20} /> Elimina traccia
           </button>

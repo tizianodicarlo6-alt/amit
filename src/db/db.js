@@ -171,13 +171,29 @@ async function deleteBeatRaw(id) {
 }
 
 // ---------- Take (registrazioni dello studio) ----------
-async function addTakeRaw({ trackId, beatId = null, blob, offset = 0, duration = 0, sr = 48000 }) {
+async function addTakeRaw({ trackId, beatId = null, blob, offset = 0, duration = 0, sr = 48000, role = 'main', mode = 'speaker', voiceStart = 0, voiceEnd = null }) {
   const id = newId();
   const audioId = newId();
   const n = (await db.takes.where('trackId').equals(trackId).count()) + 1;
   await db.transaction('rw', db.takes, db.audio, async () => {
     await db.audio.put({ id: audioId, blob, mime: 'audio/wav', kind: 'take' });
-    await db.takes.put({ id, trackId, beatId, audioId, offset, duration, sr, name: `Take ${n}`, favorite: false, createdAt: now() });
+    await db.takes.put({
+      id,
+      trackId,
+      beatId,
+      audioId,
+      offset,
+      duration,
+      sr,
+      role, // main | double | adlib
+      mode, // speaker | headphones (serve per il ritardo da compensare)
+      included: true, // suona nel mix
+      voiceStart, // dove inizia davvero la voce (secondi dall'inizio della take)
+      voiceEnd: voiceEnd ?? duration,
+      name: `Take ${n}`,
+      favorite: false,
+      createdAt: now(),
+    });
   });
   requestPersistence();
   return { id, audioId };

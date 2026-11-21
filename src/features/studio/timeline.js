@@ -57,3 +57,31 @@ export function snapToBeat(t, anchor, beatDur) {
   if (!beatDur) return t;
   return Math.max(0, anchor + Math.round((t - anchor) / beatDur) * beatDur);
 }
+
+/**
+ * Voce principale registrata in più take ("punch-in"): dove due take si sovrappongono
+ * vince la più recente. takes: [{ id, start, end, createdAt }] (start/end nel tempo del beat).
+ * Ritorna Map(id → [[inizio, fine], …]) con le parti che suonano di ogni take.
+ */
+export function mainIntervals(takes) {
+  const sorted = [...takes].sort((a, b) => b.createdAt - a.createdAt); // dalla più nuova
+  const covered = [];
+  const out = new Map();
+  for (const t of sorted) {
+    let parts = [[t.start, t.end]];
+    for (const [cs, ce] of covered) {
+      const next = [];
+      for (const [s, e] of parts) {
+        if (ce <= s || cs >= e) next.push([s, e]);
+        else {
+          if (cs > s) next.push([s, cs]);
+          if (ce < e) next.push([ce, e]);
+        }
+      }
+      parts = next;
+    }
+    out.set(t.id, parts.filter(([s, e]) => e - s > 0.05));
+    covered.push([t.start, t.end]);
+  }
+  return out;
+}

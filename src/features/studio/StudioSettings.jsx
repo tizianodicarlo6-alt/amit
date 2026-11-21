@@ -85,15 +85,17 @@ export default function StudioSettings(p) {
         <Slider label="Volume beat" value={p.beatVol} min={0} max={1} step={0.05} onChange={p.setBeatVol} format={(v) => `${Math.round(v * 100)}%`} />
 
         <div className="divider" />
-        <h2>Ritardo cuffie</h2>
-        <Slider label="Compensazione" value={p.latencyMs} min={0} max={500} step={5} onChange={p.setLatencyMs} format={(v) => `${v} ms`} />
+        <h2>Voce in ritardo?</h2>
         <p className="muted small">
-          Se riascoltando la voce arriva <b>in ritardo</b> rispetto al beat, alza questo valore; se arriva in anticipo, abbassalo. Cuffie a filo: di solito 20–80 ms.
-          Bluetooth (AirPods): 150–300 ms. Prova: registra battendo le mani sulla cassa e regola finché combaciano.
+          Il telefono ci mette un attimo a far uscire il beat e a registrare la voce: l'app lo compensa. Se nel riascolto la voce arriva <b>in ritardo</b>, alza il valore;
+          se arriva <b>in anticipo</b>, abbassalo. Vale per tutte le take registrate in quel modo.
         </p>
-        <button className="btn ghost" onClick={() => p.setLatencyMs(null)}>
-          Ripristina valore automatico
+        <Slider label="📱 Senza cuffie" value={p.latSpk} min={0} max={600} step={5} onChange={p.setLatSpk} format={(v) => `${v} ms`} />
+        <button className="btn" onClick={p.onCalibrate}>
+          Misura in automatico (senza cuffie)
         </button>
+        <Slider label="🎧 Con cuffie" value={p.latHp} min={0} max={600} step={5} onChange={p.setLatHp} format={(v) => `${v} ms`} />
+        <p className="muted small">Con le cuffie regola a orecchio: a filo di solito 20–80 ms, AirPods 150–300 ms.</p>
       </div>
     </Sheet>
   );
