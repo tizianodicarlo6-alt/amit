@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useDbQuery } from '../../db/useDbQuery.js';
-import { db, updateSketch } from '../../db/db.js';
+import { addBeat, addTrack, db, updateSketch, updateTrack } from '../../db/db.js';
+import { computePeaks } from '../../lib/audio.js';
+import { encodeWav } from '../../lib/wav.js';
+import { sketchToMidi } from './midi.js';
 import { KEYS, keyShort } from '../../constants.js';
 import Icon from '../../components/Icon.jsx';
 import Sheet from '../../components/Sheet.jsx';
 import { useTapTempo } from '../../components/useTapTempo.js';
 import ExportRow, { slug } from '../studio/ExportRow.jsx';
 import { PARTS, normalizeSketch } from './music.js';
-import { renderSketchWav } from './synth.js';
+import { renderSketch, renderSketchWav } from './synth.js';
 import { SketchPlayer } from './player.js';
 import DrumMachine from './DrumMachine.jsx';
 import NotesEditor from './NotesEditor.jsx';
+import HumRecorder from './HumRecorder.jsx';
 
 const TABS = [
   ['hum', '🎤 Canticchia'],
@@ -26,11 +30,12 @@ export default function SketchPage() {
   const navigate = useNavigate();
   const stored = useDbQuery(() => db.sketches.get(id).then((s) => s ?? null), [id], undefined);
   const [sketch, setSketch] = useState(null);
-  const [tab, setTab] = useState('drums');
+  const [tab, setTab] = useState('hum');
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
   const [pos, setPos] = useState(0);
   const [sheet, setSheet] = useState(null); // 'settings' | 'export'
+  const [beatState, setBeatState] = useState(null); // "Usa come beat"
   const playerRef = useRef(null);
   if (!playerRef.current) playerRef.current = new SketchPlayer();
   const player = playerRef.current;
@@ -86,6 +91,21 @@ export default function SketchPage() {
 
   const tap = useTapTempo((b) => change({ bpm: b }));
 
+  // suona subito (da chiamare dentro un tocco)
+  const playNow = () => {
+    player.prime();
+    setLoading(true);
+    setTimeout(async () => {
+      try {
+        await player.play(sketchRef.current);
+        setPlaying(true);
+      } catch {
+        /* l'utente può premere ▶ */
+      }
+      setLoading(false);
+    }, 60);
+  };
+
   const onPlay = async () => {
     player.prime(); // dentro il tocco
     if (playing) {
@@ -112,9 +132,32 @@ export default function SketchPage() {
   const bar = currentStep != null ? Math.floor(currentStep / 16) + 1 : 1;
   const beatN = currentStep != null ? Math.floor((currentStep % 16) / 4) + 1 : 1;
 
+  const baseName = `${slug(sketch.title)} (${sketch.bpm} BPM ${sketch.key})`;
   const prepAudio = async () => {
     const { blob } = await renderSketchWav(sketch, { loops: 2 });
-    return [new File([blob], `${slug(sketch.title)} (${sketch.bpm} BPM ${sketch.key}).wav`, { type: 'audio/wav' })];
+    return [new File([blob], `${baseName}.wav`, { type: 'audio/wav' })];
+  };
+  const prepMidi = async () => [new File([sketchToMidi(sketch, { loops: 2 })], `${baseName}.mid`, { type: 'audio/midi' })];
+  const prepBoth = async () => [...(await prepAudio()), ...(await prepMidi())];
+
+  // "Usa come beat": la bozza (ripetuta per ~2 minuti) va nella Libreria
+  const useAsBeat = async () => {
+    setBeatState({ busy: true });
+    try {
+      const loopDur = (sketch.bars * 4 * 60) / sketch.bpm;
+      const loops = Math.max(1, Math.ceil(120 / loopDur));
+      const r = await renderSketch(sketch, { loops });
+      const blob = encodeWav([r.L, r.R], r.sr);
+      const beatId = await addBeat({ blob, mime: 'audio/wav', title: sketch.title || 'Bozza', producer: 'bozza Amit', bpm: sketch.bpm, key: sketch.key, duration: r.L.length / r.sr, peaks: computePeaks(r.L) });
+      setBeatState({ beatId });
+    } catch (e) {
+      setBeatState({ error: e?.message || String(e) });
+    }
+  };
+  const writeOnIt = async () => {
+    const tid = await addTrack({ title: sketch.title || 'Nuova traccia' });
+    await updateTrack(tid, { beatId: beatState.beatId, bpm: sketch.bpm });
+    navigate(`/traccia/${tid}`);
   };
 
   return (
@@ -162,10 +205,16 @@ export default function SketchPage() {
         )}
         {tab === 'notes' && <NotesEditor sketch={sketch} change={change} player={player} currentStep={currentStep} />}
         {tab === 'hum' && (
-          <div className="empty">
-            <p>🎤 Canticchia la melodia</p>
-            <p className="muted">In arrivo nella prossima parte. Intanto crea il groove nella Batteria e la melodia nelle Note.</p>
-          </div>
+          <HumRecorder
+            sketch={sketch}
+            change={change}
+            player={player}
+            onDone={() => {
+              // beat creato: lo faccio sentire subito
+              setTab('notes');
+              playNow();
+            }}
+          />
         )}
       </div>
 
@@ -220,10 +269,30 @@ export default function SketchPage() {
         <Sheet open onClose={() => setSheet(null)} title="Manda al produttore">
           <div className="stack">
             <p className="muted small">
-              Il produttore riceve la tua idea con BPM ({sketch.bpm}) e tonalità ({keyShort(sketch.key)}) nel nome del file. Il file MIDI con le note arriva nella
-              prossima parte.
+              Il produttore riceve l'<b>audio</b> per ascoltarla subito e il <b>MIDI</b> con le note esatte (batteria, melodia, accordi e 808 su tracce separate),
+              con BPM ({sketch.bpm}) e tonalità ({keyShort(sketch.key)}). Lo apre in FL Studio, Logic o Ableton.
             </p>
-            <ExportRow key={JSON.stringify(sketch).length} primary icon="beat" title="Audio della bozza" subtitle="2 giri del loop in WAV, da mandare su WhatsApp." prepare={prepAudio} />
+            <ExportRow key={`b${JSON.stringify(sketch).length}`} primary icon="share" title="Audio + MIDI" subtitle="I due file insieme: poi scegli WhatsApp e il produttore." prepare={prepBoth} />
+            <ExportRow key={`a${JSON.stringify(sketch).length}`} icon="beat" title="Solo audio" subtitle="WAV, 2 giri del loop." prepare={prepAudio} />
+            <ExportRow key={`m${JSON.stringify(sketch).length}`} icon="tracce" title="Solo MIDI" subtitle="Le note, da aprire nel programma del produttore." prepare={prepMidi} />
+            <div className="divider" />
+            <div className="export-row">
+              <div className="reco-title">Usa come beat</div>
+              <div className="muted small">La bozza va nella tua Libreria (ripetuta per circa 2 minuti): ci scrivi e registri sopra.</div>
+              {!beatState?.beatId ? (
+                <button className="btn" onClick={useAsBeat} disabled={beatState?.busy}>
+                  {beatState?.busy ? <span className="spinner" /> : <Icon name="beat" size={20} />} {beatState?.busy ? 'Preparo…' : 'Metti nella Libreria'}
+                </button>
+              ) : (
+                <>
+                  <p className="ok small">✓ Aggiunta alla Libreria dei beat</p>
+                  <button className="btn primary" onClick={writeOnIt}>
+                    <Icon name="pen" size={20} /> Scrivi una traccia su questo beat
+                  </button>
+                </>
+              )}
+              {beatState?.error && <p className="error small">{beatState.error}</p>}
+            </div>
           </div>
         </Sheet>
       )}

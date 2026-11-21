@@ -244,3 +244,57 @@ export function bassFromChords(sketch, styleId = 'trap') {
 export function chordsFromProgression(degrees, bars) {
   return Array.from({ length: bars }, (_, i) => degrees[i % degrees.length]);
 }
+
+/**
+ * Accordi che "stanno sotto" la melodia: per ogni battuta scelgo il grado della scala
+ * il cui accordo contiene di più le note cantate (pesate per durata).
+ */
+export function chordsForMelody(melody, keyId, bars, styleId = 'trap') {
+  const { root, minor, steps } = scaleOf(keyId);
+  const usable = minor ? [0, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4, 5]; // niente accordi diminuiti
+  const fallback = (minor ? PROGRESSIONS.minor : PROGRESSIONS.major)[styleId === 'drill' ? 3 : 0].degrees;
+  const out = [];
+  for (let bar = 0; bar < bars; bar++) {
+    const inBar = melody.filter((n) => n.start < (bar + 1) * 16 && n.start + n.len > bar * 16);
+    if (!inBar.length) {
+      out.push(fallback[bar % fallback.length]);
+      continue;
+    }
+    let best = 0;
+    let bestScore = -Infinity;
+    for (const deg of usable) {
+      const tones = [0, 2, 4].map((k) => (root + steps[(deg + k) % 7]) % 12);
+      let score = 0;
+      for (const n of inBar) {
+        const pc = ((n.pitch % 12) + 12) % 12;
+        const dur = Math.min(n.start + n.len, (bar + 1) * 16) - Math.max(n.start, bar * 16);
+        if (pc === tones[0]) score += dur * 1.3;
+        else if (tones.includes(pc)) score += dur;
+        else score -= dur * 0.4;
+      }
+      if (bar === 0 && deg === 0) score += 1.5; // si parte volentieri dalla tonica
+      if (out.length && out[out.length - 1] === deg) score -= 0.8; // un po' di movimento
+      if (score > bestScore) {
+        bestScore = score;
+        best = deg;
+      }
+    }
+    out.push(best);
+  }
+  return out;
+}
+
+/** "Crea beat da questa melodia": accordi + batteria + 808 nello stile scelto. */
+export function beatFromMelody(sketch, styleId) {
+  const st = STYLES[styleId];
+  const chords = chordsForMelody(sketch.notes.melody, sketch.key, sketch.bars, styleId);
+  const withChords = { ...sketch, chords };
+  return {
+    chords,
+    drums: drumsFromStyle(styleId),
+    drumSteps: 16,
+    swing: st.swing || 0,
+    notes: { ...sketch.notes, bass: bassFromChords(withChords, styleId) },
+    instruments: { ...sketch.instruments, chords: styleId === 'lofi' || styleId === 'rnb' ? 'piano' : 'pad' },
+  };
+}

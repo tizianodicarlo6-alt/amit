@@ -39,3 +39,21 @@ test('808 dagli accordi e giri ripetuti', async () => {
   assert.equal(noteName(bass[2].pitch), 'F1'); // battuta 2: F
   assert.equal(chordsFromProgression([0, 3], 8).join(''), '03030303');
 });
+
+test('accordi scelti dalla melodia', async () => {
+  const { chordsForMelody, beatFromMelody, chordLabel, newSketchData } = await import('./music.js');
+  // battuta 1: A C E (Am) · battuta 2: F A C (F) · battuta 3: G B D (G) · battuta 4: vuota
+  const mel = [
+    { pitch: 69, start: 0, len: 4 }, { pitch: 72, start: 4, len: 4 }, { pitch: 76, start: 8, len: 8 },
+    { pitch: 65, start: 16, len: 8 }, { pitch: 69, start: 24, len: 4 }, { pitch: 72, start: 28, len: 4 },
+    { pitch: 67, start: 32, len: 8 }, { pitch: 71, start: 40, len: 4 }, { pitch: 74, start: 44, len: 4 },
+  ];
+  const ch = chordsForMelody(mel, 'Am', 4);
+  assert.deepEqual(ch.slice(0, 3).map((d) => chordLabel('Am', d)), ['Am', 'F', 'G']);
+  assert.ok(ch[3] != null); // la battuta vuota prende un accordo dal giro di base
+  const sk = { ...newSketchData({ key: 'Am', bars: 4 }), notes: { melody: mel, bass: [] } };
+  const b = beatFromMelody(sk, 'boombap');
+  assert.equal(b.swing, 30);
+  assert.ok(b.notes.bass.length >= 4);
+  assert.equal(b.drums.snare[4], 1);
+});
