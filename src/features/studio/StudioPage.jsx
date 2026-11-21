@@ -10,6 +10,7 @@ import { StudioEngine, takeToWav } from './engine.js';
 import Teleprompter, { buildLines } from './Teleprompter.jsx';
 import TakesSheet from './TakesSheet.jsx';
 import StudioSettings from './StudioSettings.jsx';
+import { FX_ORDER, FX_PRESETS } from './fx.js';
 
 export default function StudioPage() {
   const { id } = useParams();
@@ -50,7 +51,8 @@ export default function StudioPage() {
   const barDur = bpm ? 240 / bpm : 2.4;
   const introBars = track?.studio?.introBars ?? 0;
   const barsPerLine = track?.studio?.barsPerLine ?? 1;
-  const setTrackStudio = (changes) => updateTrack(id, { studio: { introBars, barsPerLine, ...changes } });
+  const fx = FX_PRESETS[track?.studio?.fx] ? track.studio.fx : 'provino';
+  const setTrackStudio = (changes) => updateTrack(id, { studio: { ...(track?.studio || {}), introBars, barsPerLine, fx, ...changes } });
   const lineCount = useMemo(() => buildLines(track?.sections).count, [track?.sections]);
   const lineTime = useCallback((i) => (introBars + i * barsPerLine) * barDur, [introBars, barsPerLine, barDur]);
   const from = startLine == null ? 0 : Math.max(0, lineTime(startLine) - barDur); // 1 battuta di "rincorsa"
@@ -168,7 +170,7 @@ export default function StudioPage() {
     }
   };
 
-  const onPlay = async (takeId = selectedTake) => {
+  const onPlay = async (takeId = selectedTake, opts = {}) => {
     if (modeRef.current === 'playing') return stopAll();
     if (modeRef.current !== 'idle' || !beatBuf) return;
     engine.unlock();
@@ -176,11 +178,23 @@ export default function StudioPage() {
     try {
       const take = takes.find((t) => t.id === takeId);
       const voice = take ? { buffer: await loadTakeBuffer(take), offset: take.offset } : null;
-      engine.play({ beat: beatBuf, voice, from, beatGain: beatVol, voiceGain: voiceVol, latency });
+      engine.play({ beat: beatBuf, voice, from: opts.from ?? from, beatGain: beatVol, voiceGain: voiceVol, latency, bpm, fx: opts.fx || fx });
       setModeBoth('playing');
       rafRef.current = requestAnimationFrame(tick);
     } catch (e) {
       setError(`Non riesco a riprodurre (${e?.message || e}).`);
+    }
+  };
+
+  // Cambio effetto: se sta suonando, riparte da dov'era con il nuovo suono
+  const changeFx = (v) => {
+    setTrackStudio({ fx: v });
+    if (modeRef.current === 'playing') {
+      const p = Math.max(0, engine.position() || 0);
+      cancelAnimationFrame(rafRef.current);
+      engine.stop();
+      setModeBoth('idle');
+      onPlay(selectedTake, { from: p, fx: v });
     }
   };
 
@@ -282,6 +296,19 @@ export default function StudioPage() {
       )}
       {flash && <div className="studio-flash">{flash}</div>}
 
+      {takes.length > 0 && mode !== 'recording' && (
+        <div className="fx-bar">
+          <span className="fx-label">Effetti voce</span>
+          <div className="chips scroll-x fx-chips">
+            {FX_ORDER.map((k) => (
+              <button key={k} className={`chip${fx === k ? ' on' : ''}`} onClick={() => changeFx(k)}>
+                {FX_PRESETS[k].label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="transport">
         <button className="t-btn" onClick={() => setSheet('takes')} disabled={active}>
           <span className="t-count">{takes.length}</span>
@@ -308,7 +335,6 @@ export default function StudioPage() {
       {sheet === 'takes' && (
         <TakesSheet
           track={track}
-          beat={beat}
           beatBuf={beatBuf}
           takes={takes}
           selected={selectedTake}
@@ -323,6 +349,8 @@ export default function StudioPage() {
           latency={latency}
           beatVol={beatVol}
           voiceVol={voiceVol}
+          fx={fx}
+          bpm={bpm}
           onClose={() => setSheet(null)}
         />
       )}

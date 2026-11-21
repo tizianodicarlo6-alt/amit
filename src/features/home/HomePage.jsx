@@ -132,11 +132,11 @@ export default function HomePage() {
           <img src={logo} alt="" className="studio-logo" />
           <div className="studio-text">
             <div className="studio-kicker">{STUDIO.name}</div>
-            <div className="studio-title">Il tuo brano è pronto?</div>
-            <p className="muted small">Mandalo ad {STUDIO.name} per rec, mix e master professionali.</p>
+            <div className="studio-title">Il pezzo ti convince?</div>
+            <p className="muted small">Hai fatto il provino e suona bene? Vieni a registrarlo da {STUDIO.name}: rec, mix e master professionali.</p>
           </div>
           <a className="btn primary big" href={whatsappLink()} target="_blank" rel="noopener noreferrer">
-            <Icon name="whatsapp" /> Scrivici su WhatsApp
+            <Icon name="whatsapp" /> Prenota su WhatsApp
           </a>
         </div>
       </div>

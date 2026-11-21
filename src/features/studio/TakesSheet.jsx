@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import Sheet from '../../components/Sheet.jsx';
 import Icon from '../../components/Icon.jsx';
-import { deleteTake, db, updateTake } from '../../db/db.js';
+import { deleteTake, updateTake } from '../../db/db.js';
 import { formatDate, formatTime } from '../../constants.js';
-import { STUDIO } from '../../config.js';
+import { STUDIO, bookingLink } from '../../config.js';
+import { FX_PRESETS } from './fx.js';
 
 const slug = (s) => (s || 'traccia').replace(/[\\/:*?"<>|]+/g, '').trim().slice(0, 60) || 'traccia';
-const extOf = (mime = '') => (mime.includes('wav') ? 'wav' : mime.includes('mp4') || mime.includes('m4a') ? 'm4a' : mime.includes('aac') ? 'aac' : mime.includes('ogg') ? 'ogg' : 'mp3');
 
 function download(file) {
   const url = URL.createObjectURL(file);
@@ -28,7 +28,7 @@ const canShare = (files) => {
 };
 
 // Esportazione in due passaggi: prima preparo il file, poi lo condividi (regola di iPhone).
-function ExportRow({ icon, title, subtitle, prepare, shareText, primary }) {
+function ExportRow({ icon, title, subtitle, prepare, primary }) {
   const [files, setFiles] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -47,7 +47,7 @@ function ExportRow({ icon, title, subtitle, prepare, shareText, primary }) {
 
   const share = async () => {
     try {
-      await navigator.share({ files, text: shareText, title: files[0].name });
+      await navigator.share({ files, title: files[0].name });
     } catch (e) {
       if (e?.name !== 'AbortError') setErr('Condivisione non riuscita: usa "Scarica".');
     }
@@ -71,11 +71,11 @@ function ExportRow({ icon, title, subtitle, prepare, shareText, primary }) {
         <div className="row">
           {canShare(files) && (
             <button className="btn primary grow" onClick={share}>
-              <Icon name="share" size={20} /> Condividi
+              <Icon name="share" size={20} /> Salva / Condividi
             </button>
           )}
           <button className="btn grow" onClick={() => files.forEach(download)}>
-            <Icon name="download" size={20} /> Scarica
+            <Icon name="download" size={20} /> Salva
           </button>
         </div>
       )}
@@ -84,7 +84,7 @@ function ExportRow({ icon, title, subtitle, prepare, shareText, primary }) {
   );
 }
 
-export default function TakesSheet({ track, beat, beatBuf, takes, selected, onSelect, onPlay, engine, loadTakeBuffer, latency, beatVol, voiceVol, onClose }) {
+export default function TakesSheet({ track, beatBuf, takes, selected, onSelect, onPlay, engine, loadTakeBuffer, latency, beatVol, voiceVol, fx, bpm, onClose }) {
   const take = takes.find((t) => t.id === selected);
   const base = slug(track.title);
 
@@ -95,23 +95,14 @@ export default function TakesSheet({ track, beat, beatBuf, takes, selected, onSe
 
   const prepMix = async () => {
     const voice = { buffer: await loadTakeBuffer(take), offset: take.offset };
-    const blob = await engine.renderMix({ beat: beatBuf, voice, latency, beatGain: beatVol, voiceGain: voiceVol });
-    return [new File([blob], `${base} - mix (${take.name}).wav`, { type: 'audio/wav' })];
+    const blob = await engine.renderMix({ beat: beatBuf, voice, latency, beatGain: beatVol, voiceGain: voiceVol, fx, bpm });
+    return [new File([blob], `${base} - provino (${take.name}).wav`, { type: 'audio/wav' })];
   };
   const prepVoice = async () => {
     const voice = { buffer: await loadTakeBuffer(take), offset: take.offset };
     const blob = engine.renderVoiceAligned({ voice, latency });
     return [new File([blob], `${base} - voce (${take.name}).wav`, { type: 'audio/wav' })];
   };
-  const prepStudio = async () => {
-    const [voiceFile] = await prepVoice();
-    const files = [voiceFile];
-    const rec = beat ? await db.audio.get(beat.audioId) : null;
-    if (rec?.blob) files.push(new File([rec.blob], `${base} - beat.${extOf(rec.mime || rec.blob.type)}`, { type: rec.mime || rec.blob.type || 'audio/mpeg' }));
-    return files;
-  };
-  const studioText = `Ciao ${STUDIO.name}! Ti mando voce e beat di "${track.title || 'la mia traccia'}"${track.bpm ? ` (${track.bpm} BPM)` : ''}. Vorrei info per rec, mix e master.`;
-
   return (
     <Sheet open onClose={onClose} title={`Take (${takes.length})`}>
       {takes.length === 0 ? (
@@ -167,16 +158,25 @@ export default function TakesSheet({ track, beat, beatBuf, takes, selected, onSe
         <div className="stack">
           <h2 className="section-title">Esporta "{take.name}"</h2>
           <ExportRow
-            key={`studio-${take.id}`}
+            key={`mix-${take.id}-${fx}`}
             primary
-            icon="whatsapp"
-            title={`Manda ad ${STUDIO.name}`}
-            subtitle="Voce + beat pronti per rec, mix e master. Poi scegli WhatsApp."
-            prepare={prepStudio}
-            shareText={studioText}
+            icon="tracce"
+            title="Salva il provino"
+            subtitle={`Beat + voce con effetto "${FX_PRESETS[fx]?.label}", in un unico file da riascoltare sul telefono.`}
+            prepare={prepMix}
           />
-          <ExportRow key={`mix-${take.id}`} icon="tracce" title="Mix (beat + voce)" subtitle="Un unico file WAV da ascoltare o far sentire." prepare={prepMix} />
-          <ExportRow key={`voice-${take.id}`} icon="mic" title="Solo voce" subtitle="WAV allineato all'inizio del beat: lo studio lo mette a 0:00." prepare={prepVoice} />
+          <ExportRow key={`voice-${take.id}`} icon="mic" title="Solo voce" subtitle="La voce senza beat e senza effetti." prepare={prepVoice} />
+
+          <div className="card studio-card">
+            <div className="studio-text">
+              <div className="studio-kicker">{STUDIO.name}</div>
+              <div className="studio-title">Ti convince?</div>
+              <p className="muted small">Se il provino spacca, vieni a registrarlo da {STUDIO.name}: rec, mix e master professionali.</p>
+            </div>
+            <a className="btn primary big" href={bookingLink(track.title, bpm)} target="_blank" rel="noopener noreferrer">
+              <Icon name="whatsapp" /> Prenota la sessione
+            </a>
+          </div>
         </div>
       )}
     </Sheet>

@@ -1,7 +1,8 @@
 // Motore dello studio: suona il beat e registra la voce sullo STESSO orologio audio,
 // così sappiamo esattamente dove cade la voce rispetto al beat.
 import { decodeBlob } from '../../lib/audio.js';
-import { concatChunks, encodeWav } from '../../lib/wav.js';
+import { concatChunks, encodeWav, peakOf } from '../../lib/wav.js';
+import { buildMaster, buildVoiceChain, levelGainFor } from './fx.js';
 
 // Processore audio che raccoglie i campioni del microfono (gira nel thread audio).
 const WORKLET = `
@@ -135,9 +136,10 @@ export class StudioEngine {
    * Suona beat (e opzionalmente una voce) da `from` secondi.
    * voice: { buffer, offset } — offset = dove cade il campione 0 della voce nel tempo del beat.
    */
-  play({ beat, voice = null, from = 0, beatGain = 1, voiceGain = 1, latency = 0, countIn = 0, bpm = 0 }) {
+  play({ beat, voice = null, from = 0, beatGain = 1, voiceGain = 1, latency = 0, countIn = 0, bpm = 0, fx = 'provino' }) {
     this.stop();
     const ctx = this.unlock();
+    const master = buildMaster(ctx);
     const lead = 0.12;
     const clickDur = countIn && bpm ? (60 / bpm) * countIn : 0;
     const t0 = ctx.currentTime + lead + clickDur; // momento in cui il beat (posizione `from`) suona
@@ -148,7 +150,7 @@ export class StudioEngine {
       const g = ctx.createGain();
       g.gain.value = beatGain;
       s.buffer = beat;
-      s.connect(g).connect(ctx.destination);
+      s.connect(g).connect(voice ? master : ctx.destination);
       if (from < beat.duration) s.start(t0, from);
       sources.push(s);
     }
@@ -157,14 +159,16 @@ export class StudioEngine {
       const g = ctx.createGain();
       g.gain.value = voiceGain;
       s.buffer = voice.buffer;
-      s.connect(g).connect(ctx.destination);
+      const chain = buildVoiceChain(ctx, fx, { bpm, level: this.levelOf(voice.buffer) });
+      s.connect(chain.input);
+      chain.output.connect(g).connect(master);
       const pos = voice.offset - latency; // posizione della voce nel tempo del beat
       const startIn = pos - from;
       if (startIn >= 0) s.start(t0 + startIn);
       else if (-startIn < voice.buffer.duration) s.start(t0, -startIn);
       sources.push(s);
     }
-    this.playing = { sources, t0, from, length: Math.max(beat?.duration || 0, voice?.buffer ? voice.offset - latency + voice.buffer.duration : 0) };
+    this.playing = { sources, master, t0, from, length: Math.max(beat?.duration || 0, voice?.buffer ? voice.offset - latency + voice.buffer.duration : 0) };
     return this.playing;
   }
 
@@ -183,6 +187,15 @@ export class StudioEngine {
         /* già fermo */
       }
     }
+    const { master } = this.playing;
+    // stacco il master poco dopo, così le code di riverbero non restano appese
+    setTimeout(() => {
+      try {
+        master.disconnect();
+      } catch {
+        /* ignorato */
+      }
+    }, 50);
     this.playing = null;
   }
 
@@ -237,28 +250,50 @@ export class StudioEngine {
     };
   }
 
-  /** Mix beat + voce in un WAV stereo. */
-  async renderMix({ beat, voice, latency = 0, beatGain = 1, voiceGain = 1 }) {
+  /** Livello automatico della voce (calcolato una volta per take). */
+  levelOf(buffer) {
+    if (!this.levels) this.levels = new WeakMap();
+    if (!this.levels.has(buffer)) this.levels.set(buffer, levelGainFor(buffer));
+    return this.levels.get(buffer);
+  }
+
+  /** Mix beat + voce (con effetti) in un WAV stereo. */
+  async renderMix({ beat, voice, latency = 0, beatGain = 1, voiceGain = 1, fx = 'provino', bpm = 0 }) {
     const sr = beat.sampleRate;
     const pos = voice.offset - latency;
-    const end = Math.max(beat.duration, pos + voice.buffer.duration);
+    const end = Math.max(beat.duration, pos + voice.buffer.duration) + 1.5; // coda del riverbero
     const Off = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     const off = new Off(2, Math.ceil(end * sr), sr);
+    const master = buildMaster(off);
     const b = off.createBufferSource();
     b.buffer = beat;
     const bg = off.createGain();
     bg.gain.value = beatGain;
-    b.connect(bg).connect(off.destination);
+    b.connect(bg).connect(master);
     b.start(0);
     const v = off.createBufferSource();
     v.buffer = voice.buffer;
     const vg = off.createGain();
     vg.gain.value = voiceGain;
-    v.connect(vg).connect(off.destination);
+    const chain = buildVoiceChain(off, fx, { bpm, level: this.levelOf(voice.buffer) });
+    v.connect(chain.input);
+    chain.output.connect(vg).connect(master);
     if (pos >= 0) v.start(pos);
     else v.start(0, -pos);
     const out = await off.startRendering();
-    return encodeWav([out.getChannelData(0), out.getChannelData(1)], sr);
+    const L = out.getChannelData(0);
+    const R = out.getChannelData(1);
+    // Sicurezza finale: niente distorsione, picco massimo a -1 dB
+    const peak = Math.max(peakOf(L), peakOf(R));
+    const ceiling = 0.89;
+    if (peak > ceiling) {
+      const k = ceiling / peak;
+      for (let i = 0; i < L.length; i++) {
+        L[i] *= k;
+        R[i] *= k;
+      }
+    }
+    return encodeWav([L, R], sr);
   }
 
   /** Solo voce, allineata all'inizio del beat (si mette a 0:00 nel progetto dello studio). */

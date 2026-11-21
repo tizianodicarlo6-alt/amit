@@ -4,7 +4,13 @@ export const STUDIO = {
   // Numero WhatsApp con prefisso internazionale, solo cifre (es. 393331234567).
   // ⚠️ PROVVISORIO: sostituire con il numero vero dello studio.
   whatsapp: '390000000000',
-  message: 'Ciao Amit Studio! Ho un brano pronto e vorrei info su rec, mix e master.',
+  message: 'Ciao Amit Studio! Ho scritto un pezzo che mi convince e vorrei registrarlo da voi, con mix e master.',
 };
 
 export const whatsappLink = (text = STUDIO.message) => `https://wa.me/${STUDIO.whatsapp}?text=${encodeURIComponent(text)}`;
+
+/** Messaggio per prenotare una sessione partendo da una traccia precisa. */
+export const bookingLink = (title, bpm) =>
+  whatsappLink(
+    `Ciao ${STUDIO.name}! Ho fatto il provino di "${title || 'un mio pezzo'}"${bpm ? ` (${bpm} BPM)` : ''} sull'app e mi convince. Vorrei registrarlo da voi, con mix e master.`
+  );
