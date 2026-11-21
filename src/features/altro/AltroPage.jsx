@@ -33,6 +33,8 @@ export default function AltroPage() {
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState('');
   const [includeBeats, setIncludeBeats] = useState(true);
+  const [includeTakes, setIncludeTakes] = useState(true);
+  const takeCount = useDbQuery(() => db.takes.count(), [], 0) || 0;
   const beatCount = useDbQuery(() => db.beats.count(), [], 0) || 0;
   const [persisted, setPersisted] = useState(null);
   const [usage, setUsage] = useState(null);
@@ -50,7 +52,7 @@ export default function AltroPage() {
     setBusy('export');
     setMsg('');
     try {
-      const { blob, filename } = await createBackup({ includeBeats });
+      const { blob, filename } = await createBackup({ includeBeats, includeTakes });
       if (share) {
         const file = new File([blob], filename, { type: 'application/json' });
         try {
@@ -123,6 +125,14 @@ export default function AltroPage() {
             <input type="checkbox" checked={includeBeats} onChange={(e) => setIncludeBeats(e.target.checked)} />
             <span>
               Includi i beat ({beatCount})<span className="muted small"> — il file sarà più pesante</span>
+            </span>
+          </label>
+        )}
+        {takeCount > 0 && (
+          <label className="check">
+            <input type="checkbox" checked={includeTakes} onChange={(e) => setIncludeTakes(e.target.checked)} />
+            <span>
+              Includi le registrazioni dello studio ({takeCount})<span className="muted small"> — il file sarà più pesante</span>
             </span>
           </label>
         )}

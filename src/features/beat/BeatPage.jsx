@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDbQuery } from '../../db/useDbQuery.js';
 import { addBeat, db } from '../../db/db.js';
 import { analyzeAudio, formatBytes, guessMime, parseBeatName } from '../../lib/audio.js';
-import { formatTime } from '../../constants.js';
+import { formatTime, keyShort } from '../../constants.js';
 import Icon from '../../components/Icon.jsx';
 import WaveformPlayer from '../../components/WaveformPlayer.jsx';
 import BeatSheet from './BeatSheet.jsx';
@@ -10,7 +10,7 @@ import BeatSheet from './BeatSheet.jsx';
 const normalize = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 export function BeatMeta({ beat }) {
-  const bits = [beat.producer && `prod. ${beat.producer}`, beat.bpm && `${beat.bpm} BPM`, beat.key, beat.duration && formatTime(beat.duration)].filter(Boolean);
+  const bits = [beat.producer && `prod. ${beat.producer}`, beat.bpm && `${beat.bpm} BPM`, beat.key && keyShort(beat.key), beat.duration && formatTime(beat.duration)].filter(Boolean);
   return <div className="muted small">{bits.join(' · ') || 'Tocca per aggiungere i dettagli'}</div>;
 }
 
@@ -45,13 +45,23 @@ export default function BeatPage() {
     const failed = [];
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
-      setProgress(`Importo ${i + 1} di ${files.length}: ${f.name}`);
+      setProgress(`${i + 1} di ${files.length} · Analizzo BPM e tonalità: ${f.name}`);
       try {
-        const { duration, peaks } = await analyzeAudio(f);
+        const a = await analyzeAudio(f);
         const info = parseBeatName(f.name);
         const mime = guessMime(f);
         const blob = f.type ? f : new Blob([f], { type: mime });
-        await addBeat({ blob, mime, title: info.title, producer: info.producer, bpm: info.bpm, duration, peaks });
+        await addBeat({
+          blob,
+          mime,
+          title: info.title,
+          producer: info.producer,
+          bpm: info.bpm ?? a.bpm ?? null,
+          key: a.key || '',
+          auto: { bpm: info.bpm == null && a.bpm != null, key: !!a.key },
+          duration: a.duration,
+          peaks: a.peaks,
+        });
       } catch (err) {
         failed.push(`${f.name}: formato non supportato o file danneggiato`);
         console.error(err);

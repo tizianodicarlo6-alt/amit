@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDbQuery } from '../../db/useDbQuery.js';
 import { addTrack, db, deleteBeat, updateBeat, updateTrack } from '../../db/db.js';
+import { analyzeAudio } from '../../lib/audio.js';
 import { BEAT_TAGS, KEYS, statusOf } from '../../constants.js';
 import Sheet from '../../components/Sheet.jsx';
 import Icon from '../../components/Icon.jsx';
@@ -15,6 +16,22 @@ function BeatForm({ beat }) {
   const status = useAutosave(form, (v) => updateBeat(beat.id, { ...v, bpm: v.bpm === '' ? null : Number(v.bpm) }));
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const tap = useTapTempo((bpm) => set('bpm', bpm));
+  const [detecting, setDetecting] = useState(false);
+  const bpmNum = Number(form.bpm) || 0;
+
+  const redetect = async () => {
+    setDetecting(true);
+    try {
+      const rec = await db.audio.get(beat.audioId);
+      if (!rec?.blob) throw new Error('file mancante');
+      const a = await analyzeAudio(rec.blob);
+      setForm((f) => ({ ...f, bpm: a.bpm ?? f.bpm, key: a.key || f.key }));
+    } catch {
+      alert('Non riesco ad analizzare questo beat.');
+    } finally {
+      setDetecting(false);
+    }
+  };
   const allBeatTags = useDbQuery(async () => (await db.beats.toArray()).flatMap((b) => b.tags || []), [], []) || [];
 
   return (
@@ -39,19 +56,34 @@ function BeatForm({ beat }) {
             Tap a tempo
           </button>
         </div>
-        <span className="muted small">Fai partire il beat e tocca "Tap" a ritmo almeno 4 volte.</span>
+        {bpmNum > 0 && (
+          <div className="row">
+            <button className="btn sm" onClick={() => set('bpm', Math.round(bpmNum / 2))}>
+              ½ · {Math.round(bpmNum / 2)}
+            </button>
+            <button className="btn sm" onClick={() => set('bpm', Math.round(bpmNum * 2))}>
+              ×2 · {Math.round(bpmNum * 2)}
+            </button>
+          </div>
+        )}
+        <span className="muted small">
+          {beat.auto?.bpm ? 'Trovato in automatico. ' : ''}Se non torna, prova ½ o ×2, oppure fai partire il beat e tocca "Tap" a ritmo.
+        </span>
       </div>
       <label className="field">
-        <span className="field-label">Tonalità</span>
+        <span className="field-label">Tonalità (Key){beat.auto?.key ? ' · trovata in automatico' : ''}</span>
         <select className="input" value={form.key} onChange={(e) => set('key', e.target.value)}>
           <option value="">— Non so / non serve —</option>
           {KEYS.map((k) => (
             <option key={k.id} value={k.id}>
-              {k.label}
+              {k.full}
             </option>
           ))}
         </select>
       </label>
+      <button className="btn ghost" onClick={redetect} disabled={detecting}>
+        {detecting ? <span className="spinner" /> : <Icon name="beat" size={20} />} {detecting ? 'Analizzo…' : 'Rileva di nuovo BPM e tonalità'}
+      </button>
       <div className="field">
         <span className="field-label">Tag</span>
         <TagPicker value={form.tags} onChange={(t) => set('tags', t)} suggestions={[...new Set([...BEAT_TAGS, ...allBeatTags])]} />

@@ -208,6 +208,9 @@ export default function TracciaPage() {
           <h1 className="ellipsis">{track.title || 'Senza titolo'}</h1>
           {project && <div className="muted small ellipsis">{project.name}</div>}
         </div>
+        <Link to={`/studio/${track.id}`} className="btn primary studio-btn">
+          <Icon name="mic" size={20} /> Studio
+        </Link>
       </header>
 
       <div className="tabs" role="tablist">

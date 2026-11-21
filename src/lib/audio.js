@@ -1,4 +1,5 @@
 // Utilità audio: lettura dei file beat, forma d'onda, nomi.
+import { analyzeSamples } from './analysis.js';
 
 const EXT_MIME = { mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', aac: 'audio/aac', ogg: 'audio/ogg', flac: 'audio/flac', aif: 'audio/aiff', aiff: 'audio/aiff' };
 
@@ -54,19 +55,81 @@ export function computePeaks(channel, n = 160) {
   return peaks.map((p) => Math.round((max ? p / max : 0) * 100) / 100);
 }
 
-/** Decodifica un file audio: durata e forma d'onda. */
-export async function analyzeAudio(blob) {
+
+const ANALYSIS_SR = 11025;
+const MAX_ANALYSIS_SECONDS = 240;
+
+/** Decodifica un Blob audio in AudioBuffer. */
+export async function decodeBlob(ctx, blob) {
+  const buf = await blob.arrayBuffer();
+  // forma "a callback" per compatibilità con Safari più vecchi
+  return new Promise((resolve, reject) => {
+    const p = ctx.decodeAudioData(buf, resolve, reject);
+    if (p && typeof p.then === 'function') p.then(resolve, reject);
+  });
+}
+
+/** Mono a 11025 Hz (media dei canali + ricampionamento lineare). */
+export function toAnalysisSamples(audio) {
+  const ch = [];
+  for (let c = 0; c < audio.numberOfChannels; c++) ch.push(audio.getChannelData(c));
+  const ratio = audio.sampleRate / ANALYSIS_SR;
+  const n = Math.min(Math.floor(audio.length / ratio), ANALYSIS_SR * MAX_ANALYSIS_SECONDS);
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = i * ratio;
+    const j = Math.floor(x);
+    const f = x - j;
+    let v = 0;
+    for (const d of ch) v += (d[j] || 0) * (1 - f) + (d[j + 1] || 0) * f;
+    out[i] = v / ch.length;
+  }
+  return out;
+}
+
+/** BPM e tonalità in background (worker); se il worker non parte, calcola qui. */
+export function detectBpmKey(samples) {
+  return new Promise((resolve) => {
+    let worker;
+    try {
+      worker = new Worker(new URL('./analysis.worker.js', import.meta.url), { type: 'module' });
+    } catch {
+      resolve(analyzeSamples(samples, ANALYSIS_SR));
+      return;
+    }
+    const fallback = () => {
+      worker.terminate();
+      resolve(analyzeSamples(samples, ANALYSIS_SR));
+    };
+    worker.onmessage = (e) => {
+      worker.terminate();
+      if (e.data.ok) resolve(e.data.result);
+      else fallback();
+    };
+    worker.onerror = fallback;
+    worker.postMessage({ samples, sr: ANALYSIS_SR });
+  });
+}
+
+/** Decodifica un file audio: durata, forma d'onda e (se richiesto) BPM e tonalità. */
+export async function analyzeAudio(blob, { detect = true } = {}) {
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return { duration: 0, peaks: [] };
   const ctx = new Ctx();
   try {
-    const buf = await blob.arrayBuffer();
-    // forma "a callback" per compatibilità con Safari più vecchi
-    const audio = await new Promise((resolve, reject) => {
-      const p = ctx.decodeAudioData(buf, resolve, reject);
-      if (p && typeof p.then === 'function') p.then(resolve, reject);
-    });
-    return { duration: audio.duration, peaks: computePeaks(audio.getChannelData(0)) };
+    const audio = await decodeBlob(ctx, blob);
+    const info = { duration: audio.duration, peaks: computePeaks(audio.getChannelData(0)) };
+    if (detect) {
+      try {
+        const r = await detectBpmKey(toAnalysisSamples(audio));
+        info.bpm = r.bpm?.bpm ?? null;
+        info.bpmAlternatives = r.bpm?.alternatives || [];
+        info.key = r.key?.id || '';
+      } catch (e) {
+        console.error('Analisi BPM/tonalità non riuscita', e);
+      }
+    }
+    return info;
   } finally {
     try {
       await ctx.close();

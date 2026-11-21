@@ -15,6 +15,8 @@ const Item = ({ to, icon, label, also = [] }) => {
 
 export default function BottomNav() {
   const { openCapture } = useCapture();
+  const { pathname } = useLocation();
+  if (pathname.startsWith('/studio')) return null; // lo studio usa tutto lo schermo
   return (
     <nav className="bottom-nav" aria-label="Navigazione principale">
       <Item to="/home" icon="home" label="Home" />

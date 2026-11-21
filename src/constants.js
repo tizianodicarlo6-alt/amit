@@ -1,3 +1,5 @@
+import { PITCH, keyInfo, parseKeyId } from './lib/analysis.js';
+
 export const STATUSES = [
   { id: 'idea', label: 'Idea', color: '#8b919c' },
   { id: 'scrittura', label: 'In scrittura', color: '#f5a524' },
@@ -52,9 +54,9 @@ export const formatTime = (sec) => {
 
 export const BEAT_TAGS = ['trap', 'drill', 'boom bap', 'r&b', 'lo-fi', 'afro', 'melodico', 'dark'];
 
-const NOTES = ['Do', 'Do#', 'Re', 'Mib', 'Mi', 'Fa', 'Fa#', 'Sol', 'Lab', 'La', 'Sib', 'Si'];
-const INTL = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
-export const KEYS = NOTES.flatMap((n, i) => [
-  { id: `${INTL[i]}m`, label: `${n} minore (${INTL[i]}m)` },
-  { id: INTL[i], label: `${n} maggiore (${INTL[i]})` },
-]);
+// Tonalità in inglese con codice Camelot (come TuneBat), es. "A Minor · Am · 8A".
+export const KEYS = PITCH.flatMap((_, pc) => [keyInfo(pc, true), keyInfo(pc, false)]).map((k) => ({ ...k, full: `${k.label} · ${k.id} · ${k.camelot}` }));
+export const keyShort = (id) => {
+  const k = parseKeyId(id);
+  return k ? `${k.id} · ${k.camelot}` : id || '';
+};

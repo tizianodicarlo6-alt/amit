@@ -35,12 +35,18 @@ function decodeRow(row) {
 }
 
 /** Crea il file di backup (Blob JSON) con tutti i dati e gli audio. */
-export async function createBackup({ includeBeats = true } = {}) {
+export async function createBackup({ includeBeats = true, includeTakes = true } = {}) {
   const data = {};
-  const beatAudio = includeBeats ? new Set() : new Set((await db.beats.toArray()).map((b) => b.audioId));
+  const skipAudio = new Set();
+  if (!includeBeats) (await db.beats.toArray()).forEach((b) => skipAudio.add(b.audioId));
+  if (!includeTakes) (await db.takes.toArray()).forEach((t) => skipAudio.add(t.audioId));
   for (const t of TABLES) {
+    if (!includeTakes && t === 'takes') {
+      data[t] = [];
+      continue;
+    }
     let rows = await db.table(t).toArray();
-    if (!includeBeats && t === 'audio') rows = rows.filter((r) => !beatAudio.has(r.id));
+    if (t === 'audio') rows = rows.filter((r) => !skipAudio.has(r.id));
     // Senza beat: teniamo le schede dei beat (titolo, bpm…) ma non i file audio.
     data[t] = [];
     for (const r of rows) data[t].push(await encodeRow(r)); // uno alla volta: meno memoria sul telefono

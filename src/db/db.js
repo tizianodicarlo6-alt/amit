@@ -137,20 +137,23 @@ async function addTrackRaw({ title = 'Nuova traccia', projectId = null } = {}) {
 const updateTrackRaw = (id, changes) => db.tracks.update(id, { ...changes, updatedAt: now() });
 
 async function deleteTrackRaw(id) {
-  await db.transaction('rw', db.tracks, db.ideas, async () => {
+  await db.transaction('rw', db.tracks, db.ideas, db.takes, db.audio, async () => {
     await db.ideas.where('trackId').equals(id).modify({ trackId: null });
+    const takes = await db.takes.where('trackId').equals(id).toArray();
+    await db.audio.bulkDelete(takes.map((t) => t.audioId));
+    await db.takes.where('trackId').equals(id).delete();
     await db.tracks.delete(id);
   });
 }
 
 // ---------- Beat ----------
 // Il file audio sta nella tabella "audio", qui solo i dati (leggeri da elencare).
-async function addBeatRaw({ blob, mime, title, producer = '', bpm = null, duration = 0, peaks = [] }) {
+async function addBeatRaw({ blob, mime, title, producer = '', bpm = null, key = '', auto = {}, duration = 0, peaks = [] }) {
   const id = newId();
   const audioId = newId();
   await db.transaction('rw', db.beats, db.audio, async () => {
     await db.audio.put({ id: audioId, blob, mime: mime || blob.type, kind: 'beat' });
-    await db.beats.put({ id, audioId, title, producer, bpm, key: '', tags: [], duration, peaks, size: blob.size, createdAt: now(), updatedAt: now() });
+    await db.beats.put({ id, audioId, title, producer, bpm, key, auto, tags: [], duration, peaks, size: blob.size, createdAt: now(), updatedAt: now() });
   });
   requestPersistence();
   return id;
@@ -164,6 +167,29 @@ async function deleteBeatRaw(id) {
     await db.tracks.filter((t) => t.beatId === id).modify({ beatId: null });
     if (beat?.audioId) await db.audio.delete(beat.audioId);
     await db.beats.delete(id);
+  });
+}
+
+// ---------- Take (registrazioni dello studio) ----------
+async function addTakeRaw({ trackId, beatId = null, blob, offset = 0, duration = 0, sr = 48000 }) {
+  const id = newId();
+  const audioId = newId();
+  const n = (await db.takes.where('trackId').equals(trackId).count()) + 1;
+  await db.transaction('rw', db.takes, db.audio, async () => {
+    await db.audio.put({ id: audioId, blob, mime: 'audio/wav', kind: 'take' });
+    await db.takes.put({ id, trackId, beatId, audioId, offset, duration, sr, name: `Take ${n}`, favorite: false, createdAt: now() });
+  });
+  requestPersistence();
+  return { id, audioId };
+}
+
+const updateTakeRaw = (id, changes) => db.takes.update(id, changes);
+
+async function deleteTakeRaw(id) {
+  const take = await db.takes.get(id);
+  await db.transaction('rw', db.takes, db.audio, async () => {
+    if (take?.audioId) await db.audio.delete(take.audioId);
+    await db.takes.delete(id);
   });
 }
 
@@ -198,3 +224,6 @@ export const setMeta = (...args) => withDb(() => setMetaRaw(...args));
 export const addBeat = (...args) => withDb(() => addBeatRaw(...args));
 export const updateBeat = (...args) => withDb(() => updateBeatRaw(...args));
 export const deleteBeat = (...args) => withDb(() => deleteBeatRaw(...args));
+export const addTake = (...args) => withDb(() => addTakeRaw(...args));
+export const updateTake = (...args) => withDb(() => updateTakeRaw(...args));
+export const deleteTake = (...args) => withDb(() => deleteTakeRaw(...args));

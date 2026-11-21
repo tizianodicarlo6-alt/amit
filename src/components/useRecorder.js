@@ -11,7 +11,7 @@ function pickMime() {
   }
 }
 
-function micErrorMessage(e) {
+export function micErrorMessage(e) {
   switch (e?.name) {
     case 'NotAllowedError':
     case 'SecurityError':
