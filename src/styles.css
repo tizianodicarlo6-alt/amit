@@ -338,3 +338,5 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .meter-bar { flex: 1; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
 .meter-bar div { height: 100%; background: linear-gradient(90deg, #35c46a, #ffd23f 70%, #ff3b3b); transition: width 0.08s; }
 .meter.silent .meter-bar { outline: 1px solid var(--danger); }
+.hp-row { display: flex; justify-content: center; padding: 4px 0 2px; }
+.hp-row .segmented button { min-height: 36px; font-size: 13px; padding: 0 14px; }

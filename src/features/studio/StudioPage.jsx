@@ -123,9 +123,7 @@ export default function StudioPage() {
   useEffect(
     () => () => {
       cancelAnimationFrame(rafRef.current);
-      engine.stop();
-      engine.releaseMic();
-      engine.ctx?.close?.().catch(() => {});
+      engine.dispose();
     },
     [engine]
   );
@@ -224,26 +222,34 @@ export default function StudioPage() {
     }
   };
 
-  const playFrom = async (from, { takeId = selectedTake, fxId = fx, beatOnly = false } = {}) => {
-    if (!beatBuf) return;
-    engine.unlock();
+  // Riascolto col lettore normale dell'iPhone (suona sempre, anche col silenzioso)
+  const playFrom = async (from, { takeId = selectedTake, fxId = fx, beatOnly = false, vGain = voiceGain } = {}) => {
+    if (!beatBuf || !beat) return;
+    engine.primePlayer(); // dentro il tocco: sblocca il lettore
     cancelAnimationFrame(rafRef.current);
     engine.stop();
     setError('');
+    const take = beatOnly ? null : takes.find((t) => t.id === takeId);
+    setModeBoth('loading');
     try {
-      const take = beatOnly ? null : takes.find((t) => t.id === takeId);
-      const voice = take ? { buffer: await loadTakeBuffer(take), offset: take.offset } : null;
-      engine.play({ beat: beatBuf, voice, from, beatGain: beatVol, voiceGain, latency, bpm, fx: fxId });
+      if (take) {
+        const voice = { buffer: await loadTakeBuffer(take), offset: take.offset };
+        await engine.playMixMedia({ beat: beatBuf, voice, from, beatGain: beatVol, voiceGain: vGain, latency, bpm, fx: fxId });
+      } else {
+        await engine.playBeatMedia(beat.audioId, from, beatBuf.duration);
+      }
       setModeBoth('playing');
       rafRef.current = requestAnimationFrame(tick);
     } catch (e) {
-      setError(`Non riesco a riprodurre (${e?.message || e}).`);
+      setError(`Non riesco a riprodurre (${e?.message || e}). Tocca di nuovo Ascolta.`);
+      engine.stop();
       setModeBoth('idle');
     }
   };
 
   const onPlay = () => {
     if (modeRef.current === 'playing') return stopAll();
+    if (modeRef.current === 'loading') return;
     if (modeRef.current !== 'idle') return;
     playFrom(startAt);
   };
@@ -512,12 +518,37 @@ export default function StudioPage() {
           </div>
           <label className="vol-row">
             <span className="fx-label">Voce sul beat</span>
-            <input className="slider" type="range" min={-6} max={12} step={0.5} value={voiceDb} onChange={(e) => setVoiceDb(Number(e.target.value))} />
+            <input
+              className="slider"
+              type="range"
+              min={-6}
+              max={12}
+              step={0.5}
+              value={voiceDb}
+              onChange={(e) => setVoiceDb(Number(e.target.value))}
+              onPointerUp={(e) => {
+                // se sta suonando, rifaccio il mix col nuovo volume da dov'eravamo
+                if (modeRef.current === 'playing') playFrom(Math.max(0, engine.position() || 0), { vGain: dbToGain(Number(e.currentTarget.value)) });
+              }}
+            />
             <span className="small vol-val">
               {voiceDb > 0 ? '+' : ''}
               {voiceDb} dB
             </span>
           </label>
+        </div>
+      )}
+
+      {!active && !sync && mode !== 'loading' && (
+        <div className="hp-row">
+          <div className="segmented" role="radiogroup" aria-label="Come registri">
+            <button role="radio" aria-checked={!headphones} className={!headphones ? 'on' : ''} onClick={() => setHeadphones(false)}>
+              📱 Senza cuffie
+            </button>
+            <button role="radio" aria-checked={headphones} className={headphones ? 'on' : ''} onClick={() => setHeadphones(true)}>
+              🎧 Con cuffie
+            </button>
+          </div>
         </div>
       )}
 
@@ -536,14 +567,14 @@ export default function StudioPage() {
             <span className="t-count">{takes.length}</span>
             <span>Take</span>
           </button>
-          <button className="t-btn" onClick={onPlay} disabled={!beatBuf || mode === 'recording' || mode === 'starting' || mode === 'saving'}>
-            <Icon name={mode === 'playing' ? 'stop' : 'play'} size={26} />
-            <span>{mode === 'playing' ? 'Stop' : take ? 'Ascolta' : 'Beat'}</span>
+          <button className="t-btn" onClick={onPlay} disabled={!beatBuf || mode === 'recording' || mode === 'starting' || mode === 'saving' || mode === 'loading'}>
+            {mode === 'loading' ? <span className="spinner" /> : <Icon name={mode === 'playing' ? 'stop' : 'play'} size={26} />}
+            <span>{mode === 'loading' ? 'Preparo…' : mode === 'playing' ? 'Stop' : take ? 'Ascolta' : 'Beat'}</span>
           </button>
           <button
             className={`rec-main${mode === 'recording' ? ' on' : ''}`}
             onClick={onRec}
-            disabled={!beatBuf || mode === 'playing' || mode === 'saving' || mode === 'starting'}
+            disabled={!beatBuf || mode === 'playing' || mode === 'saving' || mode === 'starting' || mode === 'loading'}
             aria-label={mode === 'recording' ? 'Ferma registrazione' : 'Registra'}
           >
             {mode === 'recording' ? <Icon name="stop" size={30} /> : mode === 'saving' || mode === 'starting' ? <span className="spinner big" /> : <span className="rec-core" />}
@@ -569,7 +600,7 @@ export default function StudioPage() {
           onPlay={(tid) => {
             setSelectedTake(tid);
             setSheet(null);
-            setTimeout(() => playFrom(startAt, { takeId: tid }), 0);
+            playFrom(startAt, { takeId: tid });
           }}
           engine={engine}
           loadTakeBuffer={loadTakeBuffer}

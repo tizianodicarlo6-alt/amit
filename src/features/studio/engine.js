@@ -50,8 +50,65 @@ export class StudioEngine {
     this.capture = null;
   }
 
+  /**
+   * iPhone in modalità silenziosa: l'audio "da app" (Web Audio) viene ammutolito.
+   * Dico a Safari che siamo un lettore musicale (Audio Session API, iOS 17+)
+   * e, per i telefoni più vecchi, tengo in sottofondo un audio silenzioso
+   * (un normale elemento <audio>, che suona anche col silenzioso).
+   */
+  setSession(type) {
+    try {
+      if (navigator.audioSession && navigator.audioSession.type !== type) navigator.audioSession.type = type;
+    } catch {
+      /* non supportato */
+    }
+  }
+
+  keepAlive() {
+    try {
+      if (!this.keep) {
+        const url = URL.createObjectURL(encodeWav([new Float32Array(8000)], 8000));
+        const a = new Audio();
+        a.src = url;
+        a.loop = true;
+        a.setAttribute('playsinline', '');
+        a.preload = 'auto';
+        this.keep = a;
+      }
+      if (this.keep.paused) this.keep.play().catch(() => {});
+    } catch {
+      /* ignorato */
+    }
+  }
+
+  dispose() {
+    this.stop();
+    this.releaseMic();
+    try {
+      this.player?.pause();
+      if (this.playerUrl) URL.revokeObjectURL(this.playerUrl);
+      if (this.silentUrl) URL.revokeObjectURL(this.silentUrl);
+    } catch {
+      /* ignorato */
+    }
+    this.player = null;
+    this.playerUrl = null;
+    try {
+      this.keep?.pause();
+      if (this.keep?.src) URL.revokeObjectURL(this.keep.src);
+    } catch {
+      /* ignorato */
+    }
+    this.keep = null;
+    this.ctx?.close?.().catch(() => {});
+    this.ctx = null;
+    this.setSession('auto');
+  }
+
   /** Va chiamato dentro un tocco dell'utente (regola di iPhone). */
   unlock() {
+    if (!this.stream) this.setSession('playback');
+    this.keepAlive();
     if (!this.ctx) {
       const Ctx = window.AudioContext || window.webkitAudioContext;
       this.ctx = new Ctx({ latencyHint: 'interactive' });
@@ -72,6 +129,8 @@ export class StudioEngine {
   }
 
   async loadBuffer(audioId, blob) {
+    if (!this.blobs) this.blobs = new Map();
+    this.blobs.set(audioId, blob);
     if (this.buffers.has(audioId)) return this.buffers.get(audioId);
     const buf = await decodeBlob(this.unlock(), blob);
     this.buffers.set(audioId, buf);
@@ -82,6 +141,7 @@ export class StudioEngine {
     const live = this.stream && this.stream.getAudioTracks().some((t) => t.readyState === 'live');
     if (live && this.micNode && this.micSpeaker === speaker) return;
     if (live) this.releaseMic();
+    this.setSession('play-and-record');
     // Senza cuffie: cancellazione eco, così il beat che esce dall'altoparlante non finisce nella voce
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: speaker, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
@@ -166,6 +226,7 @@ export class StudioEngine {
     this.ctx = null;
     this.ctxAfterMic = false;
     this.workletLoaded = false;
+    this.setSession('playback');
   }
 
   click(time, accent) {
@@ -230,9 +291,68 @@ export class StudioEngine {
     return this.playing;
   }
 
+  // ---------- Riascolto col lettore "normale" dell'iPhone ----------
+  // Il lettore <audio> suona sempre (anche col silenzioso), a differenza del Web Audio.
+
+  /** Da chiamare DENTRO il tocco: "sblocca" il lettore per poterlo far partire dopo. */
+  primePlayer() {
+    if (!this.player) {
+      const a = new Audio();
+      a.setAttribute('playsinline', '');
+      a.preload = 'auto';
+      this.player = a;
+      this.silentUrl = URL.createObjectURL(encodeWav([new Float32Array(4000)], 8000));
+    }
+    const a = this.player;
+    if (a.paused || a.ended) {
+      a.src = this.silentUrl;
+      a.loop = true;
+      a.play().catch(() => {});
+    }
+  }
+
+  /** Suona un Blob dal lettore; `base` = secondo del beat che corrisponde all'inizio del file. */
+  async playBlob(blob, { base = 0, startIn = 0, length }) {
+    this.stop();
+    const a = this.player || (this.primePlayer(), this.player);
+    if (this.playerUrl) URL.revokeObjectURL(this.playerUrl);
+    this.playerUrl = URL.createObjectURL(blob);
+    a.loop = false;
+    a.src = this.playerUrl;
+    await new Promise((resolve) => {
+      if (a.readyState >= 1) return resolve();
+      a.onloadedmetadata = resolve;
+      a.onerror = resolve;
+      setTimeout(resolve, 4000);
+    });
+    try {
+      a.currentTime = startIn;
+    } catch {
+      /* ignorato */
+    }
+    await a.play();
+    this.playing = { media: a, base, sources: [], master: null, t0: 0, from: base + startIn, length };
+    return this.playing;
+  }
+
+  /** Solo beat, da `from` secondi. */
+  playBeatMedia(audioId, from, duration) {
+    const blob = this.blobs?.get(audioId);
+    if (!blob) throw new Error('beat non caricato');
+    return this.playBlob(blob, { base: 0, startIn: from, length: duration });
+  }
+
+  /** Beat + take con effetti: preparo il mix del pezzo che serve e lo suono dal lettore. */
+  async playMixMedia({ beat, voice, from, latency = 0, beatGain = 1, voiceGain = 1, fx = 'provino', bpm = 0 }) {
+    const voiceEnd = voice.offset - latency + voice.buffer.duration;
+    const to = Math.min(beat.duration, Math.max(from + 2, voiceEnd + 3));
+    const blob = await this.renderMix({ beat, voice, latency, beatGain, voiceGain, fx, bpm, from, to });
+    return this.playBlob(blob, { base: from, startIn: 0, length: to });
+  }
+
   /** Secondi che mancano alla partenza del beat (durante il conteggio), altrimenti 0. */
   countInLeft() {
-    if (!this.playing || !this.ctx) return 0;
+    if (!this.playing || this.playing.media || !this.ctx) return 0;
     return Math.max(0, this.playing.t0 - this.ctx.currentTime);
   }
 
@@ -247,12 +367,24 @@ export class StudioEngine {
 
   /** Posizione attuale nel tempo del beat (secondi; negativa durante il conteggio). */
   position() {
-    if (!this.playing || !this.ctx) return null;
+    if (!this.playing) return null;
+    const m = this.playing.media;
+    if (m) return m.ended ? this.playing.length + 1 : this.playing.base + m.currentTime;
+    if (!this.ctx) return null;
     return this.playing.from + (this.ctx.currentTime - this.playing.t0);
   }
 
   stop() {
     if (!this.playing) return;
+    if (this.playing.media) {
+      try {
+        this.playing.media.pause();
+      } catch {
+        /* ignorato */
+      }
+      this.playing = null;
+      return;
+    }
     for (const s of this.playing.sources) {
       try {
         s.stop();
@@ -393,10 +525,10 @@ export class StudioEngine {
   }
 
   /** Mix beat + voce (con effetti) in un WAV stereo. */
-  async renderMix({ beat, voice, latency = 0, beatGain = 1, voiceGain = 1, fx = 'provino', bpm = 0 }) {
+  async renderMix({ beat, voice, latency = 0, beatGain = 1, voiceGain = 1, fx = 'provino', bpm = 0, from = 0, to = null }) {
     const sr = beat.sampleRate;
-    const pos = voice.offset - latency;
-    const end = Math.max(beat.duration, pos + voice.buffer.duration) + 1.5; // coda del riverbero
+    const pos = voice.offset - latency - from; // posizione della voce dentro al pezzo da preparare
+    const end = to != null ? to - from : Math.max(beat.duration, voice.offset - latency + voice.buffer.duration) + 1.5; // coda del riverbero
     const Off = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     const off = new Off(2, Math.ceil(end * sr), sr);
     const master = buildMaster(off);
@@ -407,7 +539,7 @@ export class StudioEngine {
     const carve = buildBeatCarve(off);
     b.connect(carve.input);
     carve.output.connect(bg).connect(master);
-    b.start(0);
+    b.start(0, from);
     const v = off.createBufferSource();
     v.buffer = voice.buffer;
     const vg = off.createGain();
@@ -416,7 +548,7 @@ export class StudioEngine {
     v.connect(chain.input);
     chain.output.connect(vg).connect(master);
     if (pos >= 0) v.start(pos);
-    else v.start(0, -pos);
+    else if (-pos < voice.buffer.duration) v.start(0, -pos);
     const out = await off.startRendering();
     const L = out.getChannelData(0);
     const R = out.getChannelData(1);
