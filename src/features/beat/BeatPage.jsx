@@ -7,6 +7,8 @@ import { formatTime, keyShort } from '../../constants.js';
 import Icon from '../../components/Icon.jsx';
 import WaveformPlayer from '../../components/WaveformPlayer.jsx';
 import BeatSheet from './BeatSheet.jsx';
+import SketchList from '../bozza/SketchList.jsx';
+import { useSearchParams } from 'react-router-dom';
 
 const normalize = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
@@ -16,6 +18,8 @@ export function BeatMeta({ beat }) {
 }
 
 export default function BeatPage() {
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') === 'bozze' ? 'bozze' : 'libreria';
   const beats = useDbQuery(() => db.beats.orderBy('createdAt').reverse().toArray(), [], undefined);
   const [query, setQuery] = useState('');
   const [tag, setTag] = useState(null);
@@ -47,6 +51,29 @@ export default function BeatPage() {
     setErrors(failed);
   };
 
+  const tabs = (
+    <div className="tabs">
+      <button className={`tab${tab === 'libreria' ? ' on' : ''}`} onClick={() => setParams({})}>
+        Libreria
+      </button>
+      <button className={`tab${tab === 'bozze' ? ' on' : ''}`} onClick={() => setParams({ tab: 'bozze' })}>
+        Crea bozza
+      </button>
+    </div>
+  );
+
+  if (tab === 'bozze') {
+    return (
+      <div className="page">
+        <header className="page-head">
+          <h1>Beat</h1>
+        </header>
+        {tabs}
+        <SketchList />
+      </div>
+    );
+  }
+
   return (
     <div className="page">
       <header className="page-head">
@@ -56,6 +83,7 @@ export default function BeatPage() {
         </button>
         <input ref={fileRef} type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.aif,.aiff,.flac,.ogg" multiple hidden onChange={onFiles} />
       </header>
+      {tabs}
 
       {progress && (
         <div className="notice row">

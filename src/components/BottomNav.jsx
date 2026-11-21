@@ -16,7 +16,7 @@ const Item = ({ to, icon, label, also = [] }) => {
 export default function BottomNav() {
   const { openCapture } = useCapture();
   const { pathname } = useLocation();
-  if (pathname.startsWith('/studio')) return null; // lo studio usa tutto lo schermo
+  if (pathname.startsWith('/studio') || pathname.startsWith('/bozza')) return null; // lo studio usa tutto lo schermo
   return (
     <nav className="bottom-nav" aria-label="Navigazione principale">
       <Item to="/home" icon="home" label="Home" />
@@ -25,7 +25,7 @@ export default function BottomNav() {
         <Icon name="plus" size={32} stroke={2.6} />
       </button>
       <Item to="/tracce" icon="tracce" label="Tracce" also={['/progett', '/traccia']} />
-      <Item to="/beat" icon="beat" label="Beat" />
+      <Item to="/beat" icon="beat" label="Beat" also={['/bozza']} />
     </nav>
   );
 }

@@ -14,6 +14,10 @@ db.version(1).stores({
   beats: 'id, createdAt',
   takes: 'id, trackId, createdAt',
 });
+// Fase "Crea bozza": idee di beat da mandare al produttore
+db.version(2).stores({
+  sketches: 'id, createdAt, updatedAt',
+});
 
 export const newId = () =>
   globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -231,6 +235,17 @@ async function splitTakeRaw(id, at) {
 }
 const newId_ = () => newId();
 
+// ---------- Bozze di beat ----------
+async function addSketchRaw(data) {
+  const id = newId();
+  const n = (await db.sketches.count()) + 1;
+  await db.sketches.put({ title: `Bozza ${n}`, ...data, id, createdAt: now(), updatedAt: now() });
+  requestPersistence();
+  return id;
+}
+const updateSketchRaw = (id, changes) => db.sketches.update(id, { ...changes, updatedAt: now() });
+const deleteSketchRaw = (id) => db.sketches.delete(id);
+
 // ---------- Meta ----------
 const getMetaRaw = async (key) => (await db.meta.get(key))?.value;
 const setMetaRaw = (key, value) => db.meta.put({ key, value });
@@ -266,3 +281,6 @@ export const addTake = (...args) => withDb(() => addTakeRaw(...args));
 export const updateTake = (...args) => withDb(() => updateTakeRaw(...args));
 export const deleteTake = (...args) => withDb(() => deleteTakeRaw(...args));
 export const splitTake = (...args) => withDb(() => splitTakeRaw(...args));
+export const addSketch = (...args) => withDb(() => addSketchRaw(...args));
+export const updateSketch = (...args) => withDb(() => updateSketchRaw(...args));
+export const deleteSketch = (...args) => withDb(() => deleteSketchRaw(...args));

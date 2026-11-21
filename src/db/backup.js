@@ -1,7 +1,7 @@
 import { db, setMeta } from './db.js';
 
 // Tabelle incluse nel backup (anche quelle della fase 2, così il formato resta valido).
-const TABLES = ['ideas', 'audio', 'projects', 'tracks', 'beats', 'takes'];
+const TABLES = ['ideas', 'audio', 'projects', 'tracks', 'beats', 'takes', 'sketches'];
 const FORMAT = 'amit-backup';
 const VERSION = 1;
 
