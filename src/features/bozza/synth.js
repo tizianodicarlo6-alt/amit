@@ -1,6 +1,7 @@
 // Suoni della bozza, tutti generati (niente campioni da scaricare) e render del loop.
 import { encodeWav, peakOf } from '../../lib/wav.js';
-import { DRUMS, chordNotes, normalizeSketch } from './music.js';
+import { DRUMS, PARTS, chordNotes, normalizeSketch, songBars } from './music.js';
+import { audioRuns } from './layers.js';
 
 const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
 
@@ -288,89 +289,171 @@ function playTunedSample(ctx, out, sample, midi, t, dur, vel = 1) {
   src.stop(t + dur + 0.4);
 }
 
+// Riverbero semplice (per i cori): coda di rumore che si spegne
+function reverb(ctx, sec = 1.8) {
+  const len = Math.floor(ctx.sampleRate * sec);
+  const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+  let seed = 11;
+  for (let c = 0; c < 2; c++) {
+    const d = ir.getChannelData(c);
+    for (let i = 0; i < len; i++) {
+      seed = (seed * 16807) % 2147483647;
+      d[i] = ((seed / 2147483647) * 2 - 1) * Math.pow(1 - i / len, 3);
+    }
+  }
+  const cv = ctx.createConvolver();
+  cv.buffer = ir;
+  return cv;
+}
+
+const STEMS = ['drums', 'melody', 'chords', 'bass', 'voce'];
+
 /**
- * Prepara il loop della bozza come AudioBuffer stereo, lungo esattamente `bars` battute.
- * Suono 2 giri e tengo il secondo: così le code (riverbero naturale dei suoni) passano
- * dalla fine all'inizio e il loop riparte senza "buchi".
+ * Prepara la bozza come audio stereo.
+ * Suono UNA volta il loop (2 giri) con ogni parte su una sua coppia di canali ("stem"):
+ * il 1° giro è "pulito" (senza code da prima), il 2° ha le code che girano dalla fine all'inizio.
+ * Poi monto battuta per battuta, quindi è veloce anche per un brano lungo.
+ * - loop (default): esattamente `bars` battute, ripetute `loops` volte.
+ * - song: tutto il brano secondo la struttura (Intro, Strofa…), con le parti accese/spente per sezione.
+ * samples: suoni pronti { kick: {buffer}, bass: {buffer, root}, sample: {buffer, bars}, voce: {buffer, bars, fx} }.
  */
-export async function renderSketch(raw, { sr = 44100, loops = 1, samples = {} } = {}) {
+export async function renderSketch(raw, { sr = 44100, loops = 1, samples = {}, song = false } = {}) {
   const s = normalizeSketch(raw);
   const stepDur = 60 / s.bpm / 4;
-  const loopSteps = s.bars * 16;
-  const loopDur = loopSteps * stepDur;
+  const barDur = 16 * stepDur;
+  const loopDur = s.bars * barDur;
+  const isSong = song && s.structure.length > 0;
   const Off = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-  const ctx = new Off(2, Math.ceil(loopDur * 2 * sr), sr);
+  const nCh = STEMS.length * 2;
+  const ctx = new Off(nCh, Math.ceil(loopDur * 2 * sr), sr);
   const noise = noiseBuffer(ctx);
-
-  // bus finale: leggera colla + limitatore
-  const glue = ctx.createDynamicsCompressor();
-  glue.threshold.value = -14;
-  glue.ratio.value = 2.5;
-  glue.attack.value = 0.01;
-  glue.release.value = 0.2;
-  const lim = ctx.createDynamicsCompressor();
-  lim.threshold.value = -2;
-  lim.ratio.value = 20;
-  lim.attack.value = 0.002;
-  lim.release.value = 0.06;
-  glue.connect(lim).connect(ctx.destination);
-
-  const bus = {};
-  for (const [id, m] of Object.entries(s.mix)) {
-    const g = ctx.createGain();
-    g.gain.value = m.mute ? 0 : m.vol;
-    g.connect(glue);
-    bus[id] = g;
+  const merger = ctx.createChannelMerger(nCh);
+  try {
+    ctx.destination.channelCount = nCh;
+    ctx.destination.channelInterpretation = 'discrete';
+  } catch {
+    /* già a posto */
   }
+  merger.connect(ctx.destination);
+  const bus = {};
+  STEMS.forEach((id, k) => {
+    const g = ctx.createGain();
+    g.channelCount = 2;
+    g.channelCountMode = 'explicit';
+    const sp = ctx.createChannelSplitter(2);
+    g.connect(sp);
+    sp.connect(merger, 0, k * 2);
+    sp.connect(merger, 1, k * 2 + 1);
+    bus[id] = g;
+  });
+  // la voce coi cori va anche nel riverbero
+  if (samples.voce && samples.voce.fx !== 'secca') {
+    const rv = reverb(ctx);
+    const send = ctx.createGain();
+    send.gain.value = 0.35;
+    const dry = ctx.createGain();
+    bus.voceIn = dry;
+    dry.connect(bus.voce);
+    dry.connect(send).connect(rv).connect(bus.voce);
+  } else bus.voceIn = bus.voce;
   const swingOf = (step) => (step % 2 === 1 ? (s.swing / 100) * stepDur * 0.5 : 0);
 
-  for (let rep = 0; rep < 2; rep++) {
-    const base = rep * loopDur;
-    // batteria
-    for (let step = 0; step < loopSteps; step++) {
-      const ps = step % s.drumSteps;
-      for (const d of DRUMS) {
-        const v = s.drums[d.id][ps];
-        if (!v) continue;
-        const t = base + step * stepDur + swingOf(step);
-        const hits = d.roll && v > 1 ? v : 1;
-        for (let h = 0; h < hits; h++) {
-          const th = t + (h * stepDur) / hits;
-          const vv = hits > 1 ? 0.75 : 1;
-          if (samples[d.id]) playSample(ctx, bus.drums, th, vv, samples[d.id].buffer);
-          else drumVoices[d.id](ctx, bus.drums, th, vv, noise);
+  for (let rep = 0; rep < 2; rep++)
+    for (let pb = 0; pb < s.bars; pb++) {
+      const t0 = (rep * s.bars + pb) * barDur;
+      for (let k = 0; k < 16; k++) {
+        const step = pb * 16 + k;
+        const ps = step % s.drumSteps;
+        for (const d of DRUMS) {
+          const v = s.drums[d.id][ps];
+          if (!v) continue;
+          const t = t0 + k * stepDur + swingOf(step);
+          const hits = d.roll && v > 1 ? v : 1;
+          for (let h = 0; h < hits; h++) {
+            const th = t + (h * stepDur) / hits;
+            const vv = hits > 1 ? 0.75 : 1;
+            if (samples[d.id]) playSample(ctx, bus.drums, th, vv, samples[d.id].buffer);
+            else drumVoices[d.id](ctx, bus.drums, th, vv, noise);
+          }
         }
       }
-    }
-    // melodia e 808
-    for (const part of ['melody', 'bass']) {
-      const inst = part === 'bass' ? 'bass808' : s.instruments.melody;
-      const pp = s.partPitch[part] || 0;
-      for (const n of s.notes[part] || []) {
-        if (n.start >= loopSteps) continue;
-        const t = base + n.start * stepDur + swingOf(n.start);
-        const dur = Math.max(0.05, n.len * stepDur * 0.98);
-        if (part === 'bass' && samples.bass) playTunedSample(ctx, bus.bass, samples.bass, n.pitch + pp, t, dur, n.vel ?? 1);
-        else play(ctx, bus[part], inst, n.pitch + pp, t, dur, n.vel ?? 1, noise);
+      for (const part of ['melody', 'bass']) {
+        const inst = part === 'bass' ? 'bass808' : s.instruments.melody;
+        const pp = s.partPitch[part] || 0;
+        for (const n of s.notes[part] || []) {
+          if (n.start < pb * 16 || n.start >= (pb + 1) * 16) continue;
+          const t = t0 + (n.start - pb * 16) * stepDur + swingOf(n.start);
+          const dur = Math.max(0.05, n.len * stepDur * 0.98);
+          if (part === 'bass' && samples.bass) playTunedSample(ctx, bus.bass, samples.bass, n.pitch + pp, t, dur, n.vel ?? 1);
+          else play(ctx, bus[part], inst, n.pitch + pp, t, dur, n.vel ?? 1, noise);
+        }
       }
+      const deg = s.chords[pb];
+      if (deg != null) for (const m of chordNotes(s.key, deg, 48)) play(ctx, bus.chords, s.instruments.chords, m + (s.partPitch.chords || 0), t0, barDur * 0.98, 0.7, noise);
     }
-    // accordi (uno per battuta)
-    for (let bar = 0; bar < s.bars; bar++) {
-      const deg = s.chords[bar];
-      if (deg == null) continue;
-      for (const m of chordNotes(s.key, deg, 48)) play(ctx, bus.chords, s.instruments.chords, m + (s.partPitch.chords || 0), base + bar * 16 * stepDur, 16 * stepDur * 0.98, 0.7, noise);
+  // la voce è registrata sul loop: la rimetto a ogni giro
+  if (samples.voce?.buffer)
+    for (let rep = 0; rep < 2; rep++) {
+      const src = ctx.createBufferSource();
+      src.buffer = samples.voce.buffer;
+      src.connect(bus.voceIn);
+      src.start(rep * loopDur, 0, Math.min(loopDur, samples.voce.buffer.duration));
     }
-  }
 
   const out = await ctx.startRendering();
-  const len = Math.round(loopDur * sr);
-  const L = new Float32Array(len * loops);
-  const R = new Float32Array(len * loops);
-  const srcL = out.getChannelData(0).subarray(len, len * 2);
-  const srcR = out.getChannelData(1).subarray(len, len * 2);
-  for (let k = 0; k < loops; k++) {
-    L.set(srcL, k * len);
-    R.set(srcR, k * len);
+  const stem = Object.fromEntries(STEMS.map((id, k) => [id, [out.getChannelData(k * 2), out.getChannelData(Math.min(out.numberOfChannels - 1, k * 2 + 1))]]));
+  const vol = (id) => (s.mix[id]?.mute ? 0 : s.mix[id]?.vol ?? 0.75);
+
+  // il brano battuta per battuta
+  const allOn = Object.fromEntries(PARTS.map((p) => [p.id, true]));
+  const bars = isSong ? songBars(s) : Array.from({ length: s.bars * loops }, (_, i) => ({ sec: 0, patternBar: i % s.bars, parts: allOn }));
+  const barLen = Math.round(barDur * sr);
+  const loopLen = barLen * s.bars;
+  const total = bars.length * barLen + (isSong ? Math.round(sr * 0.5) : 0);
+  const L = new Float32Array(total);
+  const R = new Float32Array(total);
+  const fade = Math.round(sr * 0.015);
+  bars.forEach((bar, i) => {
+    const dst = i * barLen;
+    const prev = isSong ? bars[i - 1] : bars[i - 1] || bars[bars.length - 1];
+    const next = isSong ? bars[i + 1] : bars[i + 1] || bars[0];
+    for (const id of STEMS) {
+      const g = vol(id);
+      if (!bar.parts[id] || !g || (id === 'voce' && !samples.voce)) continue;
+      // se la parte era spenta prima, prendo il 1° giro (senza code "fantasma")
+      const fresh = !prev || !prev.parts[id];
+      const from = (fresh && bar.patternBar === 0 ? 0 : loopLen) + bar.patternBar * barLen;
+      const endsHere = !next || !next.parts[id];
+      const [sl, sr2] = stem[id];
+      for (let j = 0; j < barLen; j++) {
+        const e = endsHere && j > barLen - fade ? (barLen - j) / fade : 1;
+        L[dst + j] += sl[from + j] * g * e;
+        R[dst + j] += sr2[from + j] * g * e;
+      }
+    }
+  });
+  // il sample: pezzi a tempo (nel brano conta le battute dall'inizio della sezione)
+  const sm = samples.sample;
+  if (sm?.buffer && vol('sample')) {
+    let secStart = 0;
+    const seq = bars.map((b, i) => {
+      if (i > 0 && b.sec !== bars[i - 1].sec) secStart = i;
+      return { on: b.parts.sample, loopBar: isSong ? i - secStart : i };
+    });
+    const cl = sm.buffer.getChannelData(0);
+    const cr = sm.buffer.getChannelData(Math.min(1, sm.buffer.numberOfChannels - 1));
+    const g = vol('sample');
+    const f4 = Math.round(sr * 0.004);
+    for (const r of audioRuns(seq, sm.bars)) {
+      const off = r.offsetBars * barLen;
+      const len = Math.min(r.lenBars * barLen, cl.length - off);
+      const dst = r.bar * barLen;
+      for (let j = 0; j < len; j++) {
+        const e = j < f4 ? j / f4 : j > len - f4 ? (len - j) / f4 : 1;
+        L[dst + j] += cl[off + j] * g * e;
+        R[dst + j] += cr[off + j] * g * e;
+      }
+    }
   }
   const peak = Math.max(peakOf(L), peakOf(R));
   if (peak > 0.89) {
@@ -380,12 +463,12 @@ export async function renderSketch(raw, { sr = 44100, loops = 1, samples = {} } 
       R[i] *= g;
     }
   }
-  return { L, R, sr, loopDur };
+  return { L, R, sr, loopDur: isSong ? bars.length * barDur : loopDur, song: isSong };
 }
 
 export async function renderSketchWav(raw, opts) {
   const r = await renderSketch(raw, opts);
-  return { blob: encodeWav([r.L, r.R], r.sr), loopDur: r.loopDur };
+  return { blob: encodeWav([r.L, r.R], r.sr), loopDur: r.loopDur, song: r.song };
 }
 
 /** Suono di una singola nota/colpo, per sentirla quando la tocchi. */

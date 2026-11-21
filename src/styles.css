@@ -517,3 +517,25 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .own-row .btn.sm { min-height: 32px; }
 .dm-lab.own { color: #ffd23f; }
 .sketch .chips.scroll-x { margin: 0; padding: 0; }
+
+/* Bozza: schede con icona sopra, struttura, sample e cori */
+.sketch .studio-tabs { gap: 2px; padding: 3px; }
+.sketch .studio-tabs .tab { display: flex; flex-direction: column; gap: 1px; min-height: 46px; padding: 2px 0; font-size: 11px; min-width: 0; }
+.sketch .tab-ico { font-size: 17px; line-height: 1.1; }
+.sketch .tab-lab { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.song-toggle { align-self: center; margin: 6px 0 2px; }
+.sketch-pos { display: flex; flex-direction: column; line-height: 1.15; min-width: 72px; }
+.sec-now { font-family: inherit; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.chip.sm { min-height: 32px; padding: 0 11px; font-size: 13px; }
+.struct-bar { display: flex; gap: 2px; height: 14px; border-radius: 6px; overflow: hidden; }
+.struct-seg { opacity: .55; }
+.struct-seg.now { opacity: 1; box-shadow: inset 0 0 0 2px #fff; }
+.t-intro { --sec: #8e8e9a; } .t-strofa { --sec: #4c9aff; } .t-rit { --sec: #f5a524; } .t-bridge { --sec: #b07cff; } .t-outro { --sec: #5c5c66; }
+.struct-seg { background: var(--sec); }
+.sec-card { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); border-left: 5px solid var(--sec); }
+.sec-card.now { border-color: var(--sec); box-shadow: 0 0 0 1px var(--sec); }
+.sec-head { display: flex; align-items: center; gap: 6px; }
+.sec-type { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 6px 8px; font-weight: 700; font-size: 14px; max-width: 120px; }
+.sec-name { font-size: 12px; color: var(--muted); font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sec-head .icon-btn:disabled { opacity: .3; }
+.layers .card { gap: 10px; }

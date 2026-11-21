@@ -10,45 +10,24 @@ import Icon from '../../components/Icon.jsx';
 import Sheet from '../../components/Sheet.jsx';
 import { useTapTempo } from '../../components/useTapTempo.js';
 import ExportRow, { slug } from '../studio/ExportRow.jsx';
-import { PARTS, normalizeSketch, transposeSketch } from './music.js';
+import { PARTS, normalizeSketch, sectionLabels, songBars, transposeSketch } from './music.js';
+import StructureEditor from './StructureEditor.jsx';
+import LayersEditor from './LayersEditor.jsx';
 import { renderSketch, renderSketchWav } from './synth.js';
 import { SketchPlayer } from './player.js';
 import DrumMachine, { OwnSound } from './DrumMachine.jsx';
 import NotesEditor from './NotesEditor.jsx';
 import HumRecorder from './HumRecorder.jsx';
+import PitchCtl from './PitchCtl.jsx';
 
 const TABS = [
-  ['drums', '🥁 Batteria'],
-  ['hum', '🎤 Canticchia'],
-  ['notes', '🎹 Note'],
-  ['mix', '🎚 Mix'],
+  ['drums', '🥁', 'Batteria'],
+  ['hum', '🎤', 'Canta'],
+  ['notes', '🎹', 'Note'],
+  ['layers', '🎧', 'Sample'],
+  ['struct', '🧱', 'Struttura'],
+  ['mix', '🎚', 'Mix'],
 ];
-
-// Pitch di una parte: semitoni e ottave
-function PitchCtl({ value = 0, onChange }) {
-  const set = (v) => onChange(Math.max(-24, Math.min(24, v)));
-  return (
-    <div className="pitch-ctl">
-      <span className="fx-label">Pitch</span>
-      <button className="btn sm" onClick={() => set(value - 12)} aria-label="Ottava giù">
-        −8va
-      </button>
-      <button className="btn sm" onClick={() => set(value - 1)} aria-label="Semitono giù">
-        −
-      </button>
-      <span className="mono pitch-val">
-        {value > 0 ? '+' : ''}
-        {value} st
-      </span>
-      <button className="btn sm" onClick={() => set(value + 1)} aria-label="Semitono su">
-        +
-      </button>
-      <button className="btn sm" onClick={() => set(value + 12)} aria-label="Ottava su">
-        +8va
-      </button>
-    </div>
-  );
-}
 
 // La bozza di beat: batteria, note, accordi, mix. Suona in loop.
 export default function SketchPage() {
@@ -62,6 +41,12 @@ export default function SketchPage() {
   const [pos, setPos] = useState(0);
   const [sheet, setSheet] = useState(null); // 'settings' | 'export'
   const [beatState, setBeatState] = useState(null); // "Usa come beat"
+  const [song, setSongState] = useState(false); // false = suona il loop, true = tutto il brano
+  const songRef = useRef(false);
+  const setSong = (v) => {
+    songRef.current = v;
+    setSongState(v);
+  };
   const playerRef = useRef(null);
   if (!playerRef.current) playerRef.current = new SketchPlayer();
   const player = playerRef.current;
@@ -98,7 +83,7 @@ export default function SketchPage() {
         saveTimer.current = setTimeout(() => updateSketch(id, next), 400);
         if (player.playing) {
           clearTimeout(renderTimer.current);
-          renderTimer.current = setTimeout(() => player.play(sketchRef.current, { keepPosition: true }), 180);
+          renderTimer.current = setTimeout(() => player.play(sketchRef.current, { keepPosition: true, song: songRef.current && sketchRef.current.structure.length > 0 }), 180);
         }
         return next;
       });
@@ -117,13 +102,13 @@ export default function SketchPage() {
 
   const tap = useTapTempo((b) => change({ bpm: b }));
 
-  // suona subito (da chiamare dentro un tocco)
-  const playNow = () => {
+  // suona subito (da chiamare dentro un tocco). at = secondo da cui partire
+  const playNow = (opts = {}) => {
     player.prime();
     setLoading(true);
     setTimeout(async () => {
       try {
-        await player.play(sketchRef.current);
+        await player.play(sketchRef.current, { song: songRef.current && sketchRef.current.structure.length > 0, ...opts });
         setPlaying(true);
       } catch {
         /* l'utente può premere ▶ */
@@ -141,7 +126,7 @@ export default function SketchPage() {
     }
     setLoading(true);
     try {
-      await player.play(sketch);
+      await player.play(sketch, { song: song && sketch.structure.length > 0 });
       setPlaying(true);
     } catch (e) {
       alert(`Non riesco a suonare la bozza (${e?.message || e}).`);
@@ -154,17 +139,29 @@ export default function SketchPage() {
   if (!stored) return <div className="page empty">Bozza non trovata.</div>;
 
   const stepDur = 60 / sketch.bpm / 4;
-  const currentStep = playing ? Math.floor(pos / stepDur) : null;
-  const bar = currentStep != null ? Math.floor(currentStep / 16) + 1 : 1;
-  const beatN = currentStep != null ? Math.floor((currentStep % 16) / 4) + 1 : 1;
+  const hasSong = sketch.structure.length > 0;
+  const songOn = song && hasSong;
+  const absStep = playing ? Math.floor(pos / stepDur) : null;
+  // nel brano: in che parte siamo e a che punto del loop
+  const sBars = songOn ? songBars(sketch) : null;
+  const sBar = absStep != null && sBars ? sBars[Math.min(sBars.length - 1, Math.floor(absStep / 16))] : null;
+  const currentStep = absStep == null ? null : sBar ? sBar.patternBar * 16 + (absStep % 16) : absStep;
+  const currentSec = sBar ? sBar.sec : null;
+  const bar = absStep != null ? Math.floor(absStep / 16) + 1 : 1;
+  const beatN = absStep != null ? Math.floor((absStep % 16) / 4) + 1 : 1;
+  const secLabel = currentSec != null ? sectionLabels(sketch.structure)[currentSec] : null;
+  const playFromBar = (b) => {
+    setSong(true);
+    playNow({ song: true, at: b * 16 * stepDur });
+  };
 
   const baseName = `${slug(sketch.title)} (${sketch.bpm} BPM ${sketch.key})`;
   const prepAudio = async () => {
     const samples = await player.loadSamples(sketch);
-    const { blob } = await renderSketchWav(sketch, { loops: 2, samples });
+    const { blob } = await renderSketchWav(sketch, { loops: 2, samples, song: hasSong });
     return [new File([blob], `${baseName}.wav`, { type: 'audio/wav' })];
   };
-  const prepMidi = async () => [new File([sketchToMidi(sketch, { loops: 2 })], `${baseName}.mid`, { type: 'audio/midi' })];
+  const prepMidi = async () => [new File([sketchToMidi(sketch, { loops: 2, song: hasSong })], `${baseName}.mid`, { type: 'audio/midi' })];
   const prepBoth = async () => [...(await prepAudio()), ...(await prepMidi())];
 
   // "Usa come beat": la bozza (ripetuta per ~2 minuti) va nella Libreria
@@ -174,7 +171,7 @@ export default function SketchPage() {
       const loopDur = (sketch.bars * 4 * 60) / sketch.bpm;
       const loops = Math.max(1, Math.ceil(120 / loopDur));
       const samples = await player.loadSamples(sketch);
-      const r = await renderSketch(sketch, { loops, samples });
+      const r = await renderSketch(sketch, { loops, samples, song: hasSong });
       const blob = encodeWav([r.L, r.R], r.sr);
       const beatId = await addBeat({ blob, mime: 'audio/wav', title: sketch.title || 'Bozza', producer: 'bozza Amit', bpm: sketch.bpm, key: sketch.key, duration: r.L.length / r.sr, peaks: computePeaks(r.L) });
       setBeatState({ beatId });
@@ -204,9 +201,10 @@ export default function SketchPage() {
       </header>
 
       <div className="tabs studio-tabs">
-        {TABS.map(([k, l]) => (
+        {TABS.map(([k, ico, l]) => (
           <button key={k} className={`tab${tab === k ? ' on' : ''}`} onClick={() => setTab(k)}>
-            {l}
+            <span className="tab-ico">{ico}</span>
+            <span className="tab-lab">{l}</span>
           </button>
         ))}
       </div>
@@ -226,7 +224,7 @@ export default function SketchPage() {
                   </button>
                   <input className="slider" type="range" min={0} max={1} step={0.05} value={m.vol} onChange={(e) => setM({ vol: Number(e.target.value) })} />
                   <span className="small mono vol-val">{Math.round(m.vol * 100)}%</span>
-                  {p.id !== 'drums' && (
+                  {['melody', 'chords', 'bass'].includes(p.id) && (
                     <div className="mix-extra">
                       <PitchCtl value={sketch.partPitch?.[p.id] || 0} onChange={(v) => change({ partPitch: { ...sketch.partPitch, [p.id]: v } })} />
                       {p.id === 'bass' && <OwnSound part="bass" label="Il tuo 808" sketch={sketch} change={change} player={player} preview={{ inst: 'bass808', midi: 33 + (sketch.partPitch?.bass || 0) }} />}
@@ -248,6 +246,8 @@ export default function SketchPage() {
             <p className="muted small">Pitch: alza o abbassa una parte (− + di un semitono, 8va di un'ottava). Trasponi sposta tutto il beat insieme.</p>
           </div>
         )}
+        {tab === 'struct' && <StructureEditor sketch={sketch} change={change} onPlayFrom={playFromBar} currentSec={currentSec} />}
+        {tab === 'layers' && <LayersEditor sketch={sketch} change={change} player={player} onPlay={() => (playing ? null : playNow())} />}
         {tab === 'notes' && <NotesEditor sketch={sketch} change={change} player={player} currentStep={currentStep} />}
         {tab === 'hum' && (
           <HumRecorder
@@ -263,8 +263,19 @@ export default function SketchPage() {
         )}
       </div>
 
+      {hasSong && (
+        <div className="segmented song-toggle">
+          <button className={!songOn ? 'on' : ''} onClick={() => (setSong(false), playing && playNow({ song: false }))}>
+            Solo il loop
+          </button>
+          <button className={songOn ? 'on' : ''} onClick={() => (setSong(true), playing && playNow({ song: true }))}>
+            Tutto il brano
+          </button>
+        </div>
+      )}
       <div className="transport sketch-transport">
         <span className="mono sketch-pos">
+          {secLabel && <span className="sec-now">{secLabel}</span>}
           {bar}.{beatN}
         </span>
         <button className="play-main" onClick={onPlay} disabled={loading} aria-label={playing ? 'Stop' : 'Suona'}>
@@ -316,14 +327,15 @@ export default function SketchPage() {
             <p className="muted small">
               Il produttore riceve l'<b>audio</b> per ascoltarla subito e il <b>MIDI</b> con le note esatte (batteria, melodia, accordi e 808 su tracce separate),
               con BPM ({sketch.bpm}) e tonalità ({keyShort(sketch.key)}). Lo apre in FL Studio, Logic o Ableton.
+              {hasSong && ' C\'è tutto il brano con la struttura (Intro, Strofe, Ritornelli…), con i nomi delle parti nel MIDI. Il sample e la voce sono solo nell\'audio.'}
             </p>
             <ExportRow key={`b${JSON.stringify(sketch).length}`} primary icon="share" title="Audio + MIDI" subtitle="I due file insieme: poi scegli WhatsApp e il produttore." prepare={prepBoth} />
-            <ExportRow key={`a${JSON.stringify(sketch).length}`} icon="beat" title="Solo audio" subtitle="WAV, 2 giri del loop." prepare={prepAudio} />
+            <ExportRow key={`a${JSON.stringify(sketch).length}`} icon="beat" title="Solo audio" subtitle={hasSong ? "WAV, tutto il brano." : "WAV, 2 giri del loop."} prepare={prepAudio} />
             <ExportRow key={`m${JSON.stringify(sketch).length}`} icon="tracce" title="Solo MIDI" subtitle="Le note, da aprire nel programma del produttore." prepare={prepMidi} />
             <div className="divider" />
             <div className="export-row">
               <div className="reco-title">Usa come beat</div>
-              <div className="muted small">La bozza va nella tua Libreria (ripetuta per circa 2 minuti): ci scrivi e registri sopra.</div>
+              <div className="muted small">{hasSong ? 'Tutto il brano, con la struttura, va nella tua Libreria: ci scrivi e registri sopra.' : 'La bozza va nella tua Libreria (ripetuta per circa 2 minuti): ci scrivi e registri sopra.'}</div>
               {!beatState?.beatId ? (
                 <button className="btn" onClick={useAsBeat} disabled={beatState?.busy}>
                   {beatState?.busy ? <span className="spinner" /> : <Icon name="beat" size={20} />} {beatState?.busy ? 'Preparo…' : 'Metti nella Libreria'}

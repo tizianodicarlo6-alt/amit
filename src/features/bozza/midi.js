@@ -1,6 +1,6 @@
 // File MIDI della bozza: lo apre qualunque programma (FL Studio, Logic, Ableton…).
 // Tracce separate: Batteria (canale 10), Melodia, Accordi, 808. Con BPM, tonalità e 4/4.
-import { DRUMS, chordNotes, normalizeSketch, scaleOf } from './music.js';
+import { DRUMS, chordNotes, normalizeSketch, scaleOf, sectionLabels, songBars } from './music.js';
 
 const PPQ = 96; // tick per quarto
 const STEP = PPQ / 4; // un sedicesimo
@@ -39,7 +39,7 @@ export function keySignature(keyId) {
 }
 
 /** Crea il file MIDI (Uint8Array). `loops` = quante volte ripetere il loop. */
-export function sketchToMidi(raw, { loops = 2 } = {}) {
+export function sketchToMidi(raw, { loops = 2, song = false } = {}) {
   const s = normalizeSketch(raw);
   const loopSteps = s.bars * 16;
   const usPerQuarter = Math.round(60000000 / s.bpm);
@@ -54,23 +54,37 @@ export function sketchToMidi(raw, { loops = 2 } = {}) {
   const chords = [];
   const bass = [];
   const swingTicks = (step) => (step % 2 === 1 ? Math.round((s.swing / 100) * STEP * 0.5) : 0);
-  for (let rep = 0; rep < loops; rep++) {
-    const base = rep * loopSteps * STEP;
-    for (let step = 0; step < loopSteps; step++) {
-      for (const d of DRUMS) {
-        const v = s.drums[d.id][step % s.drumSteps];
-        if (!v) continue;
-        const hits = d.roll && v > 1 ? v : 1;
-        for (let h = 0; h < hits; h++) drums.push(...note(9, d.gm, base + step * STEP + swingTicks(step) + Math.round((h * STEP) / hits), Math.round(STEP / hits / 2), hits > 1 ? 80 : 105));
+  // battuta per battuta: il loop ripetuto, oppure tutto il brano con la struttura
+  const allOn = { drums: true, melody: true, chords: true, bass: true };
+  const bars = song && s.structure.length ? songBars(s) : Array.from({ length: s.bars * loops }, (_, i) => ({ patternBar: i % s.bars, parts: allOn }));
+  bars.forEach((bar, bi) => {
+    const base = bi * 16 * STEP;
+    const pb = bar.patternBar;
+    const on = bar.parts;
+    if (on.drums)
+      for (let k = 0; k < 16; k++) {
+        const step = pb * 16 + k;
+        for (const d of DRUMS) {
+          const v = s.drums[d.id][step % s.drumSteps];
+          if (!v) continue;
+          const hits = d.roll && v > 1 ? v : 1;
+          for (let h = 0; h < hits; h++) drums.push(...note(9, d.gm, base + k * STEP + swingTicks(step) + Math.round((h * STEP) / hits), Math.round(STEP / hits / 2), hits > 1 ? 80 : 105));
+        }
       }
-    }
-    for (const n of s.notes.melody) if (n.start < loopSteps) melody.push(...note(0, n.pitch + (s.partPitch.melody || 0), base + n.start * STEP + swingTicks(n.start), n.len * STEP - 2, 100));
-    for (const n of s.notes.bass) if (n.start < loopSteps) bass.push(...note(2, n.pitch + (s.partPitch.bass || 0), base + n.start * STEP + swingTicks(n.start), n.len * STEP - 2, 110));
-    for (let bar = 0; bar < s.bars; bar++) {
-      const deg = s.chords[bar];
-      if (deg == null) continue;
-      for (const m of chordNotes(s.key, deg, 48)) chords.push(...note(1, m + (s.partPitch.chords || 0), base + bar * 16 * STEP, 16 * STEP - 4, 80));
-    }
+    const inBar = (n) => n.start >= pb * 16 && n.start < (pb + 1) * 16 && n.start < loopSteps;
+    if (on.melody) for (const n of s.notes.melody) if (inBar(n)) melody.push(...note(0, n.pitch + (s.partPitch.melody || 0), base + (n.start - pb * 16) * STEP + swingTicks(n.start), n.len * STEP - 2, 100));
+    if (on.bass) for (const n of s.notes.bass) if (inBar(n)) bass.push(...note(2, n.pitch + (s.partPitch.bass || 0), base + (n.start - pb * 16) * STEP + swingTicks(n.start), n.len * STEP - 2, 110));
+    const deg = s.chords[pb];
+    if (on.chords && deg != null) for (const m of chordNotes(s.key, deg, 48)) chords.push(...note(1, m + (s.partPitch.chords || 0), base, 16 * STEP - 4, 80));
+  });
+  // nomi delle sezioni come "marker" (in FL/Logic/Ableton si vedono sulla linea del tempo)
+  if (song && s.structure.length) {
+    const labels = sectionLabels(s.structure);
+    let at = 0;
+    s.structure.forEach((sec, i) => {
+      meta.push({ tick: at * 16 * STEP, data: [0xff, 0x06, ...varLen(str(labels[i]).length), ...str(labels[i])] });
+      at += sec.bars;
+    });
   }
   const tracks = [track(meta, `${s.title || 'Bozza'} · ${s.bpm} BPM · ${s.key}`), track(drums, 'Batteria'), track(melody, 'Melodia'), track(chords, 'Accordi'), track(bass, '808')];
   const header = [...str('MThd'), 0, 0, 0, 6, 0, 1, 0, tracks.length, (PPQ >> 8) & 255, PPQ & 255];

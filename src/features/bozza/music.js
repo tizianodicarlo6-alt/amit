@@ -28,7 +28,52 @@ export const PARTS = [
   { id: 'melody', label: 'Melodia' },
   { id: 'chords', label: 'Accordi' },
   { id: 'bass', label: '808 / Basso' },
+  { id: 'sample', label: 'Sample' },
+  { id: 'voce', label: 'Voce / cori' },
 ];
+
+// ---------- Struttura del brano (Intro, Strofa, Ritornello…) ----------
+// Ogni sezione ripete il loop della bozza per `bars` battute e accende solo alcune parti.
+export const SECTION_TYPES = [
+  { id: 'intro', label: 'Intro', bars: 4, parts: ['melody', 'chords', 'sample'] },
+  { id: 'strofa', label: 'Strofa', bars: 16, parts: ['drums', 'chords', 'bass', 'sample'] },
+  { id: 'rit', label: 'Ritornello', bars: 8, parts: ['drums', 'melody', 'chords', 'bass', 'sample', 'voce'] },
+  { id: 'bridge', label: 'Bridge', bars: 8, parts: ['melody', 'chords', 'voce'] },
+  { id: 'outro', label: 'Outro', bars: 4, parts: ['melody', 'chords'] },
+];
+export const sectionType = (id) => SECTION_TYPES.find((t) => t.id === id) || SECTION_TYPES[1];
+
+let secN = 0;
+export function newSection(type) {
+  const t = sectionType(type);
+  return { id: `s${Date.now().toString(36)}${(secN++).toString(36)}`, type: t.id, bars: t.bars, parts: Object.fromEntries(PARTS.map((p) => [p.id, t.parts.includes(p.id)])) };
+}
+
+/** La struttura classica di un pezzo rap. */
+export const CLASSIC_STRUCTURE = ['intro', 'strofa', 'rit', 'strofa', 'rit', 'bridge', 'rit', 'outro'];
+
+/** Nome da mostrare: "Strofa 2", "Ritornello 1"… (numerato solo se ce n'è più di uno). */
+export function sectionLabels(structure) {
+  const tot = {};
+  for (const s of structure) tot[s.type] = (tot[s.type] || 0) + 1;
+  const seen = {};
+  return structure.map((s) => {
+    seen[s.type] = (seen[s.type] || 0) + 1;
+    return tot[s.type] > 1 ? `${sectionType(s.type).label} ${seen[s.type]}` : sectionType(s.type).label;
+  });
+}
+
+/**
+ * Il brano battuta per battuta: [{ sec (indice), patternBar (battuta del loop), parts }].
+ * La battuta del loop riparte da 1 a ogni sezione, così ogni sezione inizia "dall'inizio".
+ */
+export function songBars(sketch) {
+  const out = [];
+  (sketch.structure || []).forEach((sec, i) => {
+    for (let b = 0; b < sec.bars; b++) out.push({ sec: i, patternBar: b % sketch.bars, parts: sec.parts });
+  });
+  return out;
+}
 
 const emptyPattern = () => Object.fromEntries(DRUMS.map((d) => [d.id, Array(MAX_STEPS).fill(0)]));
 
@@ -46,6 +91,7 @@ export function newSketchData({ bpm = 140, key = 'Am', bars = 4 } = {}) {
     partPitch: { melody: 0, chords: 0, bass: 0 }, // pitch di ogni parte in semitoni (−24…+24)
     samples: {}, // suoni caricati dall'utente: { kick: audioId, …, bass: audioId }
     style: null,
+    structure: [], // sezioni del brano (vuoto = solo il loop)
     mix: Object.fromEntries(PARTS.map((p) => [p.id, { vol: p.id === 'drums' ? 0.9 : 0.75, mute: false }])),
   };
 }
@@ -64,6 +110,7 @@ export function normalizeSketch(s) {
   out.mix = { ...base.mix, ...(s.mix || {}) };
   out.partPitch = { ...base.partPitch, ...(s.partPitch || {}) };
   out.samples = { ...(s.samples || {}) };
+  out.structure = (s.structure || []).map((sec) => ({ ...sec, parts: { ...Object.fromEntries(PARTS.map((p) => [p.id, sectionType(sec.type).parts.includes(p.id)])), ...sec.parts } }));
   return out;
 }
 
@@ -310,5 +357,8 @@ export function transposeSketch(sketch, st) {
   const newRoot = (((root + st) % 12) + 12) % 12;
   const key = `${PITCH[newRoot]}${minor ? 'm' : ''}`;
   const shift = (list) => (list || []).map((n) => ({ ...n, pitch: n.pitch + st }));
-  return { key, notes: { ...sketch.notes, melody: shift(sketch.notes.melody), bass: shift(sketch.notes.bass) } };
+  // anche il sample e la voce seguono la nuova tonalità
+  const samples = { ...(sketch.samples || {}) };
+  for (const k of ['sample', 'voce']) if (samples[k]) samples[k] = { ...samples[k], semis: (samples[k].semis || 0) + st };
+  return { key, notes: { ...sketch.notes, melody: shift(sketch.notes.melody), bass: shift(sketch.notes.bass) }, samples };
 }
