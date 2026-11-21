@@ -472,3 +472,21 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .mute { width: 34px; height: 30px; border-radius: 6px; border: 1px solid #3a3a42; background: #1a1a1f; color: #9a9aa2; font-weight: 900; font-size: 12px; }
 .mute.on { background: #4c9aff; color: #000; border-color: #4c9aff; }
 .sketch .studio-tabs .tab { font-size: 13px; padding: 0 4px; white-space: nowrap; }
+.notes-ed .parts button { min-height: 38px; }
+.notes-tools { gap: 8px; }
+.notes-tools .chip { min-height: 32px; padding: 0 10px; font-size: 12px; }
+.roll { overflow: auto; max-height: 52vh; border: 1px solid var(--border); border-radius: 12px; background: #0a0a0c; -webkit-overflow-scrolling: touch; }
+.roll-inner { position: relative; }
+.roll-row { position: absolute; left: 0; right: 0; border-bottom: 1px solid #1c1c22; }
+.roll-row.tonic { background: rgba(255, 255, 255, 0.04); }
+.roll-key { position: sticky; left: 0; z-index: 3; display: flex; align-items: center; width: 52px; height: 100%; padding-left: 6px; font-size: 10px; font-weight: 700; color: var(--muted); background: var(--surface); border-right: 1px solid var(--border); cursor: pointer; }
+.roll-row.tonic .roll-key { color: #fff; }
+.roll-grid { position: absolute; top: 0; cursor: pointer; background-image: linear-gradient(to right, #1a1a20 1px, transparent 1px), linear-gradient(to right, #2c2c34 1px, transparent 1px), linear-gradient(to right, #55555f 1px, transparent 1px); }
+.roll-note { position: absolute; border-radius: 4px; background: #4c9aff; border: 1px solid #9cc8ff; pointer-events: none; }
+.roll-note.bass { background: #f5a524; border-color: #ffd18a; }
+.roll-head { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff3b3b; pointer-events: none; }
+.bass-style { max-width: 160px; min-height: 38px; padding: 6px 10px; font-size: 14px; }
+.chord-bars { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.chord-bar { display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.chord-bar.now { border-color: #ff3b3b; }
+.chord-bar select { min-height: 40px; padding: 6px 10px; }

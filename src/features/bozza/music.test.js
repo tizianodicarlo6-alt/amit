@@ -29,3 +29,13 @@ test('groove e bozze', () => {
   assert.equal(old.bpm, 90);
   assert.equal(newSketchData().bars, 4);
 });
+
+test('808 dagli accordi e giri ripetuti', async () => {
+  const { bassFromChords, chordsFromProgression, noteName } = await import('./music.js');
+  const chords = chordsFromProgression([0, 5, 2, 6], 4);
+  assert.deepEqual(chords, [0, 5, 2, 6]);
+  const bass = bassFromChords({ key: 'Am', bars: 4, chords }, 'trap');
+  assert.deepEqual(bass.slice(0, 2).map((n) => [noteName(n.pitch), n.start, n.len]), [['A1', 0, 10], ['A1', 10, 6]]);
+  assert.equal(noteName(bass[2].pitch), 'F1'); // battuta 2: F
+  assert.equal(chordsFromProgression([0, 3], 8).join(''), '03030303');
+});

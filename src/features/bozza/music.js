@@ -218,3 +218,29 @@ export function drumsFromStyle(styleId) {
   const st = STYLES[styleId];
   return Object.fromEntries(DRUMS.map((d) => [d.id, Array.from({ length: MAX_STEPS }, (_, i) => (st.drums[d.id] || [])[i % 16] || 0)]));
 }
+
+/** 808 / basso che segue gli accordi, col ritmo tipico dello stile (note lunghe fino al colpo dopo). */
+export function bassFromChords(sketch, styleId = 'trap') {
+  const rhythm = STYLES[styleId]?.bassRhythm || [0, 8];
+  const { root, steps } = scaleOf(sketch.key);
+  const out = [];
+  let last = null;
+  for (let bar = 0; bar < sketch.bars; bar++) {
+    const deg = sketch.chords[bar] ?? last;
+    if (deg == null) continue;
+    last = deg;
+    // tonica dell'accordo nell'ottava bassa (tra E1 e D#2: zona da 808)
+    let m = 24 + ((root + steps[deg]) % 12);
+    if (m < 28) m += 12;
+    rhythm.forEach((r, k) => {
+      const next = k + 1 < rhythm.length ? rhythm[k + 1] : 16;
+      out.push({ pitch: m, start: bar * 16 + r, len: next - r, vel: 1 });
+    });
+  }
+  return out;
+}
+
+/** Giro di accordi ripetuto su tutte le battute del loop. */
+export function chordsFromProgression(degrees, bars) {
+  return Array.from({ length: bars }, (_, i) => degrees[i % degrees.length]);
+}

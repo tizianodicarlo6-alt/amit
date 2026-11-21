@@ -11,6 +11,7 @@ import { PARTS, normalizeSketch } from './music.js';
 import { renderSketchWav } from './synth.js';
 import { SketchPlayer } from './player.js';
 import DrumMachine from './DrumMachine.jsx';
+import NotesEditor from './NotesEditor.jsx';
 
 const TABS = [
   ['hum', '🎤 Canticchia'],
@@ -159,10 +160,11 @@ export default function SketchPage() {
             })}
           </div>
         )}
-        {(tab === 'hum' || tab === 'notes') && (
+        {tab === 'notes' && <NotesEditor sketch={sketch} change={change} player={player} currentStep={currentStep} />}
+        {tab === 'hum' && (
           <div className="empty">
-            <p>{tab === 'hum' ? '🎤 Canticchia la melodia' : '🎹 Melodia, accordi e 808'}</p>
-            <p className="muted">In arrivo nella prossima parte. Intanto crea il groove nella Batteria.</p>
+            <p>🎤 Canticchia la melodia</p>
+            <p className="muted">In arrivo nella prossima parte. Intanto crea il groove nella Batteria e la melodia nelle Note.</p>
           </div>
         )}
       </div>
