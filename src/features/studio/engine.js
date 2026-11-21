@@ -78,11 +78,15 @@ export class StudioEngine {
     return buf;
   }
 
-  async ensureMic() {
-    if (this.stream && this.stream.getAudioTracks().some((t) => t.readyState === 'live') && this.micNode) return;
+  async ensureMic({ speaker = false } = {}) {
+    const live = this.stream && this.stream.getAudioTracks().some((t) => t.readyState === 'live');
+    if (live && this.micNode && this.micSpeaker === speaker) return;
+    if (live) this.releaseMic();
+    // Senza cuffie: cancellazione eco, così il beat che esce dall'altoparlante non finisce nella voce
     this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
+      audio: { echoCancellation: speaker, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
     });
+    this.micSpeaker = speaker;
     // Safari su iPhone: se il contesto audio è nato PRIMA del microfono, a volte registra silenzio.
     // Lo ricreo adesso (i beat già caricati restano validi).
     if (this.ctx && !this.ctxAfterMic) {
@@ -142,6 +146,26 @@ export class StudioEngine {
     this.stream = null;
     this.micNode = null;
     this.recNode = null;
+    this.analyser = null;
+  }
+
+  /**
+   * Fine registrazione: spengo il microfono e ricreo l'audio al prossimo tocco.
+   * Su iPhone, col microfono acceso l'audio esce dalla capsula delle chiamate (bassissimo):
+   * così il riascolto torna sull'altoparlante a volume pieno.
+   */
+  async endMicSession() {
+    this.releaseMic();
+    if (this.ctx) {
+      try {
+        await this.ctx.close();
+      } catch {
+        /* ignorato */
+      }
+    }
+    this.ctx = null;
+    this.ctxAfterMic = false;
+    this.workletLoaded = false;
   }
 
   click(time, accent) {
@@ -249,8 +273,8 @@ export class StudioEngine {
   }
 
   /** Avvia beat + registrazione. Ritorna una promessa risolta allo stop con la take. */
-  async record({ beat, from = 0, beatGain = 1, countIn = 0, bpm = 0, monitor = false, fx = 'pulita' }) {
-    await this.ensureMic();
+  async record({ beat, from = 0, beatGain = 1, countIn = 0, bpm = 0, monitor = false, fx = 'pulita', speaker = false }) {
+    await this.ensureMic({ speaker });
     const ctx = this.ctx;
     const chunks = [];
     let firstFrame = null;
@@ -273,7 +297,7 @@ export class StudioEngine {
     }
 
     // "Sentiti in cuffia": la tua voce (con l'effetto scelto) mentre registri
-    if (monitor) {
+    if (monitor && !speaker) {
       const chain = buildVoiceChain(ctx, fx, { bpm, level: 1.6 });
       this.micNode.connect(chain.input);
       chain.output.connect(ctx.destination);

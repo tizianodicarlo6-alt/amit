@@ -52,12 +52,30 @@ export default function StudioSettings(p) {
             ))}
           </div>
         </div>
-        <label className="check">
-          <input type="checkbox" checked={p.monitor} onChange={(e) => p.setMonitor(e.target.checked)} />
-          <span>
-            Sentiti in cuffia mentre registri<span className="muted small"> — solo con le cuffie! Con gli AirPods arriva in ritardo.</span>
+        <div className="field">
+          <span className="field-label">Come registri?</span>
+          <div className="chips">
+            <button className={`chip${!p.headphones ? ' on' : ''}`} onClick={() => p.setHeadphones(false)}>
+              📱 Senza cuffie
+            </button>
+            <button className={`chip${p.headphones ? ' on' : ''}`} onClick={() => p.setHeadphones(true)}>
+              🎧 Con le cuffie
+            </button>
+          </div>
+          <span className="muted small">
+            {p.headphones
+              ? 'Voce pulitissima: il beat lo senti solo tu in cuffia.'
+              : 'Il beat esce dall\'altoparlante: l\'app toglie il più possibile il beat dalla voce (cancellazione eco).'}
           </span>
-        </label>
+        </div>
+        {p.headphones && (
+          <label className="check">
+            <input type="checkbox" checked={p.monitor} onChange={(e) => p.setMonitor(e.target.checked)} />
+            <span>
+              Sentiti in cuffia mentre registri<span className="muted small"> — con gli AirPods la voce arriva un po' in ritardo.</span>
+            </span>
+          </label>
+        )}
         <label className="check">
           <input type="checkbox" checked={p.countIn} onChange={(e) => p.setCountIn(e.target.checked)} />
           <span>

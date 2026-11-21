@@ -53,6 +53,7 @@ export default function StudioPage() {
   const [countIn, setCountIn] = usePref('studio.countIn2', false);
   const [preRoll, setPreRoll] = usePref('studio.preRoll', 5);
   const [monitor, setMonitor] = usePref('studio.monitor', false);
+  const [headphones, setHeadphones] = usePref('studio.headphones', false); // di default: senza cuffie
   const [latencyMs, setLatencyMs] = usePref('studio.latencyMs', null);
   const [beatVol, setBeatVol] = usePref('studio.beatVol', 0.8);
   const [voiceDb, setVoiceDb] = usePref('studio.voiceDb', 2);
@@ -158,10 +159,12 @@ export default function StudioPage() {
         const r = await handle.stop();
         setLevel(0);
         if (r.duration < 0.5) {
+          await engine.endMicSession();
           setModeBoth('idle');
           return;
         }
         if (r.silent) {
+          await engine.endMicSession();
           setError('La registrazione è muta: il microfono non ha catturato niente. Controlla il permesso microfono (Impostazioni → Safari → Microfono) e che le cuffie col microfono siano collegate bene, poi riprova.');
           setModeBoth('idle');
           return;
@@ -172,10 +175,11 @@ export default function StudioPage() {
         ab.copyToChannel(r.samples, 0);
         engine.buffers.set(saved.audioId, ab);
         setSelectedTake(saved.id);
-        setFlash('Take salvata ✓');
+        setFlash('Take salvata ✓ · tocca Ascolta');
       } catch (e) {
         setError(`Non sono riuscito a salvare la registrazione (${e?.message || e}).`);
       }
+      await engine.endMicSession(); // il riascolto torna sull'altoparlante
       setModeBoth('idle');
       return;
     }
@@ -210,11 +214,12 @@ export default function StudioPage() {
     setModeBoth('starting');
     try {
       silentSince.current = 0;
-      recRef.current = await engine.record({ beat: beatBuf, from: startAt, beatGain: beatVol, countIn: countIn && bpm ? 4 : 0, bpm, monitor, fx });
+      recRef.current = await engine.record({ beat: beatBuf, from: startAt, beatGain: beatVol, countIn: countIn && bpm ? 4 : 0, bpm, monitor: monitor && headphones, fx, speaker: !headphones });
       setModeBoth('recording');
       rafRef.current = requestAnimationFrame(tick);
     } catch (e) {
       setError(micErrorMessage(e));
+      await engine.endMicSession();
       setModeBoth('idle');
     }
   };
@@ -410,7 +415,16 @@ export default function StudioPage() {
 
       {!tipSeen && (
         <div className="notice studio-tip" onClick={() => setTipSeen(true)}>
-          🎧 <b>Metti le cuffie</b> (meglio a filo): senza, il beat finisce nel microfono. <span className="muted small">Tocca per chiudere</span>
+          {headphones ? (
+            <>
+              🎧 <b>Modalità cuffie</b>: senti il beat in cuffia, la voce resta pulita. <span className="muted small">Tocca per chiudere</span>
+            </>
+          ) : (
+            <>
+              📱 <b>Senza cuffie</b>: tieni il telefono a 20–30 cm dalla bocca e il volume del beat medio. Se hai le cuffie, attivale in <b>Regola</b> per un suono più pulito.{' '}
+              <span className="muted small">Tocca per chiudere</span>
+            </>
+          )}
         </div>
       )}
 
@@ -595,6 +609,8 @@ export default function StudioPage() {
           setPreRoll={setPreRoll}
           monitor={monitor}
           setMonitor={setMonitor}
+          headphones={headphones}
+          setHeadphones={setHeadphones}
           latencyMs={Math.round(latency * 1000)}
           setLatencyMs={setLatencyMs}
           beatVol={beatVol}
