@@ -12,7 +12,7 @@ import { voicedBounds } from '../../lib/wav.js';
 import { buildVoices, takeLatency } from './voices.js';
 import { StudioEngine, takeToWav } from './engine.js';
 import Teleprompter from './Teleprompter.jsx';
-import TakesSheet from './TakesSheet.jsx';
+import MixEditor from './MixEditor.jsx';
 import StudioSettings from './StudioSettings.jsx';
 import StructureSheet from './StructureSheet.jsx';
 import BeatTimeline from './BeatTimeline.jsx';
@@ -46,7 +46,10 @@ export default function StudioPage() {
   const [level, setLevel] = useState(0); // livello microfono mentre registri
   const silentSince = useRef(0);
   const [selectedLine, setSelectedLine] = useState(null);
-  const [sheet, setSheet] = useState(null); // 'takes' | 'settings' | 'structure'
+  const [sheet, setSheet] = useState(null); // 'settings' | 'structure'
+  const [view, setView] = useState('rec'); // 'rec' = Registra · 'mix' = Montaggio
+  const [editTick, setEditTick] = useState(0);
+  const playFromRef = useRef(null);
   const [sync, setSync] = useState(null); // { queue: [blockId...], marked: n } durante "Segna a orecchio"
   const recRef = useRef(null);
   const recRoleRef = useRef('main');
@@ -154,7 +157,8 @@ export default function StudioPage() {
   // Voci da mixare (take accese, oppure solo quelle in `only`) col buffer audio caricato
   const loadVoices = async ({ only = null, vGain = voiceGain, latOverride = lat } = {}) => {
     const list = only ? takes.filter((t) => only.includes(t.id)) : takes.filter((t) => t.included !== false);
-    const withBuf = await Promise.all(list.map(async (t) => ({ ...t, buffer: await loadTakeBuffer(t) })));
+    // buffer con l'eventuale pitch già applicato
+    const withBuf = await Promise.all(list.map(async (t) => ({ ...t, buffer: engine.pitched(t.audioId, await loadTakeBuffer(t), t.pitch || 0) })));
     return buildVoices(withBuf, { lat: latOverride, voiceGain: vGain, only });
   };
 
@@ -273,6 +277,14 @@ export default function StudioPage() {
       setModeBoth('idle');
     }
   };
+
+  playFromRef.current = playFrom;
+  const onEdited = () => setEditTick((x) => x + 1);
+  useEffect(() => {
+    if (!editTick || modeRef.current !== 'playing') return;
+    const t = setTimeout(() => playFromRef.current?.(Math.max(0, engine.position() || 0)), 150); // aspetto che il database si aggiorni
+    return () => clearTimeout(t);
+  }, [editTick, engine]);
 
   const onPlay = () => {
     if (modeRef.current === 'playing') return stopAll();
@@ -433,6 +445,55 @@ export default function StudioPage() {
         )}
       </header>
 
+      <div className="tabs studio-tabs" role="tablist">
+        <button role="tab" aria-selected={view === 'rec'} className={`tab${view === 'rec' ? ' on' : ''}`} onClick={() => !active && setView('rec')} disabled={active && view !== 'rec'}>
+          🎙 Registra
+        </button>
+        <button role="tab" aria-selected={view === 'mix'} className={`tab${view === 'mix' ? ' on' : ''}`} onClick={() => !active && setView('mix')} disabled={active && view !== 'mix'}>
+          🎚 Montaggio{takes.length ? ` (${takes.length})` : ''}
+        </button>
+      </div>
+
+      {error && (
+        <div className="notice error-box" onClick={() => setError('')}>
+          {error}
+        </div>
+      )}
+      {flash && <div className="studio-flash">{flash}</div>}
+
+      {view === 'mix' && beat && (
+        <MixEditor
+          takes={takes}
+          beat={beat}
+          beatBuf={beatBuf}
+          duration={duration}
+          blocks={timeline.blocks}
+          position={mode === 'playing' ? pos : startAt}
+          playing={mode === 'playing'}
+          loading={mode === 'loading'}
+          lat={lat}
+          engine={engine}
+          loadTakeBuffer={loadTakeBuffer}
+          loadVoices={loadVoices}
+          onSeek={onSeek}
+          onPlay={onPlay}
+          onEdited={onEdited}
+          fx={fx}
+          changeFx={changeFx}
+          voiceDb={voiceDb}
+          setVoiceDb={setVoiceDb}
+          nudgeLat={nudgeLat}
+          curLatMs={curLatMs}
+          headphones={headphones}
+          beatVol={beatVol}
+          bpm={bpm}
+          track={track}
+        />
+      )}
+
+      {view === 'rec' && (
+        <>
+
       {!beatId || beat === null ? (
         <div className="studio-nobeat stack">
           <p>Scegli il beat su cui registrare:</p>
@@ -546,59 +607,6 @@ export default function StudioPage() {
                 : ''}
       </div>
 
-      {error && (
-        <div className="notice error-box" onClick={() => setError('')}>
-          {error}
-        </div>
-      )}
-      {flash && <div className="studio-flash">{flash}</div>}
-
-      {takes.length > 0 && mode !== 'recording' && !sync && (
-        <div className="mixbar">
-          <div className="fx-bar">
-            <span className="fx-label">Effetti</span>
-            <div className="chips scroll-x fx-chips">
-              {FX_ORDER.map((k) => (
-                <button key={k} className={`chip${fx === k ? ' on' : ''}`} onClick={() => changeFx(k)}>
-                  {FX_PRESETS[k].label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <label className="vol-row">
-            <span className="fx-label">Voce sul beat</span>
-            <input
-              className="slider"
-              type="range"
-              min={-6}
-              max={12}
-              step={0.5}
-              value={voiceDb}
-              onChange={(e) => setVoiceDb(Number(e.target.value))}
-              onPointerUp={(e) => {
-                // se sta suonando, rifaccio il mix col nuovo volume da dov'eravamo
-                if (modeRef.current === 'playing') playFrom(Math.max(0, engine.position() || 0), { vGain: dbToGain(Number(e.currentTarget.value)) });
-              }}
-            />
-            <span className="small vol-val">
-              {voiceDb > 0 ? '+' : ''}
-              {voiceDb} dB
-            </span>
-          </label>
-          {(mode === 'playing' || mode === 'loading') && (
-          <div className="vol-row">
-            <span className="fx-label">Voce in ritardo? {headphones ? '🎧' : '📱'}</span>
-            <button className="btn sm" onClick={() => nudgeLat(-10)} aria-label="Meno ritardo">
-              −
-            </button>
-            <span className="small vol-val mono">{curLatMs} ms</span>
-            <button className="btn sm" onClick={() => nudgeLat(10)} aria-label="Più ritardo">
-              +
-            </button>
-          </div>
-          )}
-        </div>
-      )}
 
       {!active && !sync && mode !== 'loading' && (
         <div className="hp-row">
@@ -626,9 +634,9 @@ export default function StudioPage() {
         </div>
       ) : (
         <div className="transport">
-          <button className="t-btn" onClick={() => setSheet('takes')} disabled={active}>
+          <button className="t-btn" onClick={() => setView('mix')} disabled={active}>
             <span className="t-count">{takes.length}</span>
-            <span>Take</span>
+            <span>Montaggio</span>
           </button>
           <button className="t-btn" onClick={onPlay} disabled={!beatBuf || mode === 'recording' || mode === 'starting' || mode === 'saving' || mode === 'loading'}>
             {mode === 'loading' ? <span className="spinner" /> : <Icon name={mode === 'playing' ? 'stop' : 'play'} size={26} />}
@@ -653,28 +661,9 @@ export default function StudioPage() {
         </div>
       )}
 
-      {sheet === 'takes' && (
-        <TakesSheet
-          track={track}
-          beatBuf={beatBuf}
-          takes={takes}
-          selected={selectedTake}
-          onSelect={setSelectedTake}
-          onPlay={(t) => {
-            // ascolta solo questa take sul beat, da poco prima che attacchi
-            setSelectedTake(t.id);
-            setSheet(null);
-            const from = Math.max(0, t.offset - takeLatency(t, lat) + (t.voiceStart || 0) - 2);
-            playFrom(from, { only: [t.id] });
-          }}
-          engine={engine}
-          loadVoices={loadVoices}
-          beatVol={beatVol}
-          fx={fx}
-          bpm={bpm}
-          onClose={() => setSheet(null)}
-        />
+        </>
       )}
+
       {sheet === 'structure' && (
         <StructureSheet
           timeline={timeline}

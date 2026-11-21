@@ -190,6 +190,10 @@ async function addTakeRaw({ trackId, beatId = null, blob, offset = 0, duration =
       included: true, // suona nel mix
       voiceStart, // dove inizia davvero la voce (secondi dall'inizio della take)
       voiceEnd: voiceEnd ?? duration,
+      trimStart: 0, // taglio: da dove suona (secondi dentro la take)
+      trimEnd: duration, // taglio: fin dove suona
+      pitch: 0, // semitoni (−12…+12)
+      gainDb: 0, // volume della singola take
       name: `Take ${n}`,
       favorite: false,
       createdAt: now(),
@@ -204,10 +208,28 @@ const updateTakeRaw = (id, changes) => db.takes.update(id, changes);
 async function deleteTakeRaw(id) {
   const take = await db.takes.get(id);
   await db.transaction('rw', db.takes, db.audio, async () => {
-    if (take?.audioId) await db.audio.delete(take.audioId);
     await db.takes.delete(id);
+    // l'audio lo cancello solo se nessun altro pezzo (dopo un "taglia") lo usa ancora
+    const others = take?.audioId ? await db.takes.filter((t) => t.audioId === take.audioId).count() : 0;
+    if (take?.audioId && !others) await db.audio.delete(take.audioId);
   });
 }
+
+/** Taglia una take in due nel punto `at` (secondi dentro la take). */
+async function splitTakeRaw(id, at) {
+  const t = await db.takes.get(id);
+  if (!t) return null;
+  const ts = t.trimStart ?? 0;
+  const te = t.trimEnd ?? t.duration;
+  if (at <= ts + 0.05 || at >= te - 0.05) return null;
+  const newId = newId_();
+  await db.transaction('rw', db.takes, async () => {
+    await db.takes.update(id, { trimEnd: at });
+    await db.takes.put({ ...t, id: newId, trimStart: at, trimEnd: te, name: `${t.name} B` });
+  });
+  return newId;
+}
+const newId_ = () => newId();
 
 // ---------- Meta ----------
 const getMetaRaw = async (key) => (await db.meta.get(key))?.value;
@@ -243,3 +265,4 @@ export const deleteBeat = (...args) => withDb(() => deleteBeatRaw(...args));
 export const addTake = (...args) => withDb(() => addTakeRaw(...args));
 export const updateTake = (...args) => withDb(() => updateTakeRaw(...args));
 export const deleteTake = (...args) => withDb(() => deleteTakeRaw(...args));
+export const splitTake = (...args) => withDb(() => splitTakeRaw(...args));

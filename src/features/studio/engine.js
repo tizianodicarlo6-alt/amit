@@ -5,6 +5,7 @@ import { concatChunks, encodeWav, peakOf } from '../../lib/wav.js';
 
 const SILENCE = 0.0008; // sotto questo picco la registrazione è considerata muta
 import { activeRms, buildBeatCarve, buildMaster, buildVoiceChain, levelGainFor } from './fx.js';
+import { pitchShift } from '../../lib/pitch.js';
 
 // Processore audio che raccoglie i campioni del microfono (gira nel thread audio).
 const WORKLET = `
@@ -278,9 +279,13 @@ export class StudioEngine {
       out = pn;
     }
     out.connect(master);
-    const startIn = v.pos - from;
-    if (startIn >= 0) s.start(t0 + startIn);
-    else if (-startIn < v.buffer.duration) s.start(t0, -startIn);
+    // taglio: suona solo da trimStart a trimEnd della take
+    const ts = Math.max(0, v.trimStart || 0);
+    const te = Math.min(v.buffer.duration, v.trimEnd ?? v.buffer.duration);
+    if (te - ts <= 0.01) return s;
+    const startIn = v.pos + ts - from;
+    if (startIn >= 0) s.start(t0 + startIn, ts, te - ts);
+    else if (-startIn < te - ts) s.start(t0, ts - startIn, te - ts + startIn);
     return s;
   }
 
@@ -368,7 +373,7 @@ export class StudioEngine {
 
   /** Beat + voci con effetti: preparo il mix del pezzo che serve e lo suono dal lettore. */
   async playMixMedia({ beat, voices, from, beatGain = 1, fx = 'provino', bpm = 0 }) {
-    const voiceEnd = Math.max(0, ...voices.map((v) => v.pos + v.buffer.duration));
+    const voiceEnd = Math.max(0, ...voices.map((v) => v.pos + (v.trimEnd ?? v.buffer.duration)));
     const to = Math.min(beat.duration, Math.max(from + 2, voiceEnd + 3));
     const blob = await this.renderMix({ beat, voices, beatGain, fx, bpm, from, to });
     return this.playBlob(blob, { base: from, startIn: 0, length: to });
@@ -613,7 +618,7 @@ export class StudioEngine {
   /** Mix beat + voci (con effetti) in un WAV stereo, dal secondo `from` al secondo `to`. */
   async renderMix({ beat, voices, beatGain = 1, fx = 'provino', bpm = 0, from = 0, to = null }) {
     const sr = beat.sampleRate;
-    const lastVoice = Math.max(0, ...voices.map((v) => v.pos + v.buffer.duration));
+    const lastVoice = Math.max(0, ...voices.map((v) => v.pos + (v.trimEnd ?? v.buffer.duration)));
     const end = (to ?? Math.max(beat.duration, lastVoice) + 1.5) - from; // +1.5 s: coda del riverbero
     const Off = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     const off = new Off(2, Math.max(1, Math.ceil(end * sr)), sr);
@@ -643,17 +648,41 @@ export class StudioEngine {
     return encodeWav([L, R], sr);
   }
 
-  /** Solo voce, allineata all'inizio del beat (si mette a 0:00 nel progetto dello studio). */
+  /** Solo voce (col taglio e il pitch), allineata all'inizio del beat: si mette a 0:00. */
   renderVoiceAligned({ voice }) {
     const buf = voice.buffer;
     const sr = buf.sampleRate;
-    const shift = Math.round(voice.pos * sr); // campioni di silenzio da aggiungere (o togliere)
     const src = buf.getChannelData(0);
-    const len = Math.max(0, src.length + shift);
+    const ts = Math.max(0, voice.trimStart || 0);
+    const te = Math.min(buf.duration, voice.trimEnd ?? buf.duration);
+    const startAt = Math.round((voice.pos + ts) * sr); // dove inizia il pezzo nel tempo del beat
+    const len = Math.max(0, startAt + Math.round((te - ts) * sr));
     const out = new Float32Array(len);
-    if (shift >= 0) out.set(src, shift);
-    else out.set(src.subarray(-shift));
+    const from = Math.round(ts * sr);
+    for (let i = 0; i < len - Math.max(0, startAt); i++) {
+      const o = startAt + i;
+      const j = from + i;
+      if (o >= 0 && o < len && j < src.length) out[o] = src[j];
+    }
     return encodeWav([out], sr);
+  }
+
+  /** Versione con pitch di una take (calcolata una volta e tenuta in memoria). */
+  pitched(audioId, buffer, semitones) {
+    if (!semitones) return buffer;
+    if (!this.pitchCache) this.pitchCache = new Map();
+    const key = `${audioId}:${semitones}`;
+    if (this.pitchCache.has(key)) return this.pitchCache.get(key);
+    const data = pitchShift(buffer.getChannelData(0), buffer.sampleRate, semitones);
+    let out;
+    try {
+      out = new AudioBuffer({ length: data.length, sampleRate: buffer.sampleRate, numberOfChannels: 1 });
+    } catch {
+      out = this.unlock().createBuffer(1, data.length, buffer.sampleRate);
+    }
+    out.copyToChannel(data, 0);
+    this.pitchCache.set(key, out);
+    return out;
   }
 }
 
