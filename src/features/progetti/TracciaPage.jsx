@@ -3,13 +3,14 @@ import { useTapTempo } from '../../components/useTapTempo.js';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useDbQuery } from '../../db/useDbQuery.js';
 import { db, deleteTake, deleteTrack, updateIdea, updateTake, updateTrack } from '../../db/db.js';
-import { STATUSES, formatDate, formatTime, roleLabel } from '../../constants.js';
+import { STATUSES, formatDate, formatTime, roleLabel, sectionLabel } from '../../constants.js';
 import AudioPlayer from '../../components/AudioPlayer.jsx';
 import Icon from '../../components/Icon.jsx';
 import Sheet from '../../components/Sheet.jsx';
 import { useAutosave, SaveStatus } from '../../components/useAutosave.jsx';
 import { useCapture } from '../../components/CaptureContext.jsx';
 import LyricsEditor from '../editor/LyricsEditor.jsx';
+import BeatLoop from '../../components/BeatLoop.jsx';
 import IdeaCard from '../taccuino/IdeaCard.jsx';
 import IdeaSheet from '../taccuino/IdeaSheet.jsx';
 import BeatStep from './BeatStep.jsx';
@@ -212,6 +213,58 @@ function Steps({ step, setStep, track, takeCount, onStudio }) {
   );
 }
 
+// ② Testo: il beat in alto (scegli col dito il pezzo da sentire in loop) e sotto il testo.
+// La zona scelta mentre scrivi una sezione resta legata a quella sezione (e allo studio: "parte qui").
+function WriteOnBeat({ track }) {
+  const beat = useDbQuery(() => (track.beatId ? db.beats.get(track.beatId).then((b) => b ?? null) : Promise.resolve(null)), [track.beatId], undefined);
+  const [active, setActive] = useState(null);
+  const [free, setFree] = useState(null);
+  const st = track.studio || {};
+  const loops = st.loops || {};
+  const region = (active && loops[active]) || free;
+  const labels = useMemo(() => {
+    const tot = {};
+    const seen = {};
+    for (const s of track.sections || []) tot[s.type] = (tot[s.type] || 0) + 1;
+    return Object.fromEntries((track.sections || []).map((s) => {
+      seen[s.type] = (seen[s.type] || 0) + 1;
+      return [s.id, `${sectionLabel(s.type)}${tot[s.type] > 1 ? ` ${seen[s.type]}` : ''}`];
+    }));
+  }, [track.sections]);
+  const onRegion = (r) => {
+    setFree(r);
+    if (!active) return;
+    const nextLoops = { ...loops };
+    const starts = { ...(st.starts || {}) };
+    if (r) {
+      nextLoops[active] = r;
+      starts[active] = r.from;
+    } else {
+      delete nextLoops[active];
+      delete starts[active];
+    }
+    updateTrack(track.id, { studio: { ...st, loops: nextLoops, starts } });
+  };
+  const marks = Object.entries(loops)
+    .filter(([id]) => labels[id])
+    .map(([id, r]) => ({ id, label: labels[id], from: r.from, to: r.to, active: id === active }));
+  return (
+    <>
+      {beat && (
+        <BeatLoop
+          beat={beat}
+          region={region}
+          onRegion={onRegion}
+          marks={marks}
+          attack={st.attack ?? null}
+          caption={active && labels[active] ? `Stai scrivendo: ${labels[active]}` : beat.title}
+        />
+      )}
+      <LyricsEditor key={track.id} track={track} activeId={active} onFocusSection={setActive} />
+    </>
+  );
+}
+
 export default function TracciaPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -257,12 +310,12 @@ export default function TracciaPage() {
 
       {step === 'beat' && <BeatStep track={track} onNext={() => setStep('testo')} />}
       {step === 'testo' && (
-        <>
-          <LyricsEditor key={track.id} track={track} />
+        <div className="wob">
+          <WriteOnBeat track={track} />
           <button className="btn primary big" onClick={goStudio}>
             <Icon name="mic" /> Avanti: registra →
           </button>
-        </>
+        </div>
       )}
 
       {info && (

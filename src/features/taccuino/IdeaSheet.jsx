@@ -7,9 +7,15 @@ import TrackPicker from '../../components/TrackPicker.jsx';
 import AudioPlayer from '../../components/AudioPlayer.jsx';
 import { addTrack, deleteIdea, updateIdea } from '../../db/db.js';
 import { formatDate } from '../../constants.js';
+import NoteEditor from './NoteEditor.jsx';
 
 // Modifica di un'idea esistente.
 export default function IdeaSheet({ idea, onClose }) {
+  if (idea.type !== 'voice') return <NoteEditor idea={idea} onClose={onClose} />;
+  return <VoiceIdeaSheet idea={idea} onClose={onClose} />;
+}
+
+function VoiceIdeaSheet({ idea, onClose }) {
   const [text, setText] = useState(idea.text || '');
   const [tags, setTags] = useState(idea.tags || []);
   const [trackId, setTrackId] = useState(idea.trackId || null);

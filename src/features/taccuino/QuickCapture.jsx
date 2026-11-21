@@ -7,6 +7,7 @@ import AudioPlayer from '../../components/AudioPlayer.jsx';
 import { useRecorder } from '../../components/useRecorder.js';
 import { addIdea } from '../../db/db.js';
 import { formatTime } from '../../constants.js';
+import NoteEditor from './NoteEditor.jsx';
 
 // Foglio "Nuova idea": scegli testo o voce e salva in due tocchi.
 export default function QuickCapture({ onClose, trackId: initialTrack = null, mode: initialMode = null }) {
@@ -31,6 +32,9 @@ export default function QuickCapture({ onClose, trackId: initialTrack = null, mo
     else await addIdea({ type: 'voice', text: text.trim(), blob: rec.result.blob, mime: rec.result.mime, duration: rec.result.duration, tags, trackId });
     onClose();
   };
+
+  // scrivere: pagina a tutto schermo, come l'app Note
+  if (mode === 'text') return <NoteEditor trackId={trackId} onClose={onClose} />;
 
   return (
     <Sheet open onClose={onClose} title="Nuova idea">

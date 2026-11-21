@@ -83,7 +83,7 @@ const Line = memo(function Line({ line, analysis, showRhymes, showSyllables }) {
 });
 
 // Campo di testo trasparente sopra al "disegno": si scrive normalmente, si vedono i colori.
-function SectionText({ text, onChange, analysis, showRhymes, showSyllables }) {
+function SectionText({ text, onChange, analysis, showRhymes, showSyllables, onFocus }) {
   const lines = text.split('\n');
   return (
     <div className={`lyr${showSyllables ? ' with-syl' : ''}`}>
@@ -96,6 +96,7 @@ function SectionText({ text, onChange, analysis, showRhymes, showSyllables }) {
         className="lyr-input"
         value={text}
         onChange={(e) => onChange(e.target.value)}
+        onFocus={onFocus}
         spellCheck={false}
         autoCorrect="off"
         autoCapitalize="sentences"
@@ -105,7 +106,7 @@ function SectionText({ text, onChange, analysis, showRhymes, showSyllables }) {
   );
 }
 
-export default function LyricsEditor({ track }) {
+export default function LyricsEditor({ track, onFocusSection, activeId }) {
   const [sections, setSections] = useState(() => (track.sections?.length ? track.sections : [newSection('strofa')]));
   const [mode, setMode] = useState(readMode);
   const showRhymes = mode !== 'off';
@@ -170,7 +171,7 @@ export default function LyricsEditor({ track }) {
         seen[s.type] = (seen[s.type] || 0) + 1;
         const bars = s.text.split('\n').filter((l) => l.trim()).length;
         return (
-          <section key={s.id} className={`lyr-section type-${s.type}`}>
+          <section key={s.id} className={`lyr-section type-${s.type}${activeId === s.id ? ' active' : ''}`}>
             <div className="lyr-head">
               <select className="section-select" value={s.type} onChange={(e) => update(s.id, { type: e.target.value })} aria-label="Tipo di sezione">
                 {SECTION_TYPES.map((t) => (
@@ -192,7 +193,7 @@ export default function LyricsEditor({ track }) {
                 <Icon name="trash" size={18} />
               </button>
             </div>
-            <SectionText text={s.text} onChange={(text) => update(s.id, { text })} analysis={analysis} showRhymes={showRhymes} showSyllables={showSyllables} />
+            <SectionText onFocus={() => onFocusSection?.(s.id)} text={s.text} onChange={(text) => update(s.id, { text })} analysis={analysis} showRhymes={showRhymes} showSyllables={showSyllables} />
           </section>
         );
       })}
