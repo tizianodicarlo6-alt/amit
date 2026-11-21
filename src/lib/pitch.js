@@ -13,7 +13,9 @@ export function timeStretch(input, sr, factor) {
   const N = Math.max(256, Math.round(sr * 0.04)) & ~1; // finestre da 40 ms
   const Hs = N / 2; // passo in uscita
   const Ha = Hs / factor; // passo in ingresso
-  const tol = Math.round(N / 4); // quanto posso spostarmi per trovare il punto più simile
+  // quanto posso spostarmi per trovare il punto più simile: al massimo metà del passo in ingresso,
+  // altrimenti con allungamenti forti (pitch molto in su) ritrova sempre il pezzo "naturale" e non allunga
+  const tol = Math.max(8, Math.min(Math.round(N / 4), Math.round(Ha * 0.5)));
   const step = 4; // calcolo la somiglianza su un campione ogni 4 (più veloce)
   const win = hann(N);
   const outLen = Math.ceil(input.length * factor) + N;

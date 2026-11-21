@@ -152,6 +152,7 @@ export default function MixEditor(p) {
   };
   const setPitch = async (v) => {
     const semis = Math.max(-12, Math.min(12, v));
+    engine.primePlayer(); // dentro il tocco: così poi te lo faccio sentire subito
     setBusy('pitch');
     await new Promise((r) => setTimeout(r, 30)); // lascio aggiornare lo schermo
     try {
@@ -160,7 +161,8 @@ export default function MixEditor(p) {
       /* lo calcolerà al riascolto */
     }
     setBusy('');
-    edit(selected, { pitch: semis });
+    await updateTake(selected.id, { pitch: semis });
+    p.onAudition?.(selected); // ascolto immediato di questo pezzo col nuovo pitch
   };
   const prepVoice = async () => {
     const [voice] = await p.loadVoices({ only: [selected.id] });

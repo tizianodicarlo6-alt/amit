@@ -29,6 +29,8 @@ export default function StudioPage() {
   const beat = useDbQuery(() => (beatId ? db.beats.get(beatId).then((b) => b ?? null) : null), [beatId], undefined);
   const beats = useDbQuery(() => db.beats.orderBy('createdAt').reverse().toArray(), [], []) || [];
   const takes = useDbQuery(() => db.takes.where('trackId').equals(id).reverse().sortBy('createdAt'), [id], []) || [];
+  const takesRef = useRef(takes);
+  takesRef.current = takes;
 
   const engineRef = useRef(null);
   if (!engineRef.current) engineRef.current = new StudioEngine();
@@ -485,6 +487,14 @@ export default function StudioPage() {
           solo={solo}
           setSolo={setSolo}
           onOpenFx={() => setSheet('fx')}
+          onAudition={(t) =>
+            // dopo che il database si è aggiornato, suono solo quel pezzo da poco prima che attacchi
+            setTimeout(() => {
+              const tt = takesRef.current.find((x) => x.id === t.id) || t;
+              const from = Math.max(0, tt.offset - takeLatency(tt, lat) + (tt.trimStart || 0) - 1);
+              playFromRef.current?.(from, { only: [tt.id] });
+            }, 200)
+          }
           onOpenMix={() => setSheet('mix')}
           track={track}
         />

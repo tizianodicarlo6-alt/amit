@@ -97,7 +97,7 @@ function TrackTakes({ track }) {
   return (
     <div className="stack">
       <div className="row between">
-        <span className="field-label">Registrazioni ({takes.length})</span>
+        <span className="field-label">Registrazioni ({takes.length}) · voce originale</span>
         <Link to={`/studio/${track.id}`} className="see-all">
           Apri lo studio
         </Link>
