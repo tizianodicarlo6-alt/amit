@@ -8,6 +8,7 @@ import ProgettiPage from './features/progetti/ProgettiPage.jsx';
 import ProgettoPage from './features/progetti/ProgettoPage.jsx';
 import AltroPage from './features/altro/AltroPage.jsx';
 import HomePage from './features/home/HomePage.jsx';
+import BeatPage from './features/beat/BeatPage.jsx';
 import ErrorBoundary, { ErrorToast } from './components/ErrorBoundary.jsx';
 
 // HashRouter (indirizzi con #) funziona senza configurazioni su GitHub Pages.
@@ -26,7 +27,8 @@ export default function App() {
               <Route path="/progetti" element={<ProgettiPage />} />
               <Route path="/progetto/:id" element={<ProgettoPage />} />
               <Route path="/altro" element={<AltroPage />} />
-              {/* Fase 2-3: /beat, /studio, /allenamento */}
+              <Route path="/beat" element={<BeatPage />} />
+              {/* Prossimamente: /allenamento */}
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>
           </ErrorBoundary>

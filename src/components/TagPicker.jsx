@@ -12,8 +12,9 @@ export function useAllTags() {
   );
 }
 
-export default function TagPicker({ value, onChange }) {
-  const all = useAllTags();
+export default function TagPicker({ value, onChange, suggestions }) {
+  const ideaTags = useAllTags();
+  const all = suggestions || ideaTags;
   const [custom, setCustom] = useState('');
   const tags = [...new Set([...all, ...value])];
   const toggle = (t) => onChange(value.includes(t) ? value.filter((x) => x !== t) : [...value, t]);

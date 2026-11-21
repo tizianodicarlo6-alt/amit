@@ -4,6 +4,7 @@ import { useDbQuery } from '../../db/useDbQuery.js';
 import { addProject, db } from '../../db/db.js';
 import { PROJECT_KINDS, kindLabel } from '../../constants.js';
 import Icon from '../../components/Icon.jsx';
+import TracksTabs from './TracksTabs.jsx';
 import Sheet from '../../components/Sheet.jsx';
 
 export default function ProgettiPage() {
@@ -33,6 +34,8 @@ export default function ProgettiPage() {
           <Icon name="plus" size={20} /> Nuovo
         </button>
       </header>
+
+      <TracksTabs />
 
       {projects && projects.length === 0 && (
         <div className="empty">

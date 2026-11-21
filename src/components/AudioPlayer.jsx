@@ -3,6 +3,7 @@ import { useDbQuery } from '../db/useDbQuery.js';
 import { db } from '../db/db.js';
 import { formatTime } from '../constants.js';
 import Icon from './Icon.jsx';
+import { claim, release } from './audioBus.js';
 
 // Lettore audio semplice. Accetta un Blob oppure l'id di un audio salvato.
 export default function AudioPlayer({ blob: blobProp, audioId, duration: knownDuration = 0 }) {
@@ -25,8 +26,10 @@ export default function AudioPlayer({ blob: blobProp, audioId, duration: knownDu
     e.stopPropagation();
     const a = ref.current;
     if (!a) return;
-    if (a.paused) a.play();
-    else a.pause();
+    if (a.paused) {
+      claim(a);
+      a.play().catch(() => {});
+    } else a.pause();
   };
 
   const seek = (e) => {
@@ -36,6 +39,11 @@ export default function AudioPlayer({ blob: blobProp, audioId, duration: knownDu
     const r = e.currentTarget.getBoundingClientRect();
     a.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * dur;
   };
+
+  useEffect(() => {
+    const a = ref.current;
+    return () => a && release(a);
+  }, [url]);
 
   const pct = dur ? Math.min(100, (time / dur) * 100) : 0;
   return (

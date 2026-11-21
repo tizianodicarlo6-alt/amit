@@ -143,6 +143,30 @@ async function deleteTrackRaw(id) {
   });
 }
 
+// ---------- Beat ----------
+// Il file audio sta nella tabella "audio", qui solo i dati (leggeri da elencare).
+async function addBeatRaw({ blob, mime, title, producer = '', bpm = null, duration = 0, peaks = [] }) {
+  const id = newId();
+  const audioId = newId();
+  await db.transaction('rw', db.beats, db.audio, async () => {
+    await db.audio.put({ id: audioId, blob, mime: mime || blob.type, kind: 'beat' });
+    await db.beats.put({ id, audioId, title, producer, bpm, key: '', tags: [], duration, peaks, size: blob.size, createdAt: now(), updatedAt: now() });
+  });
+  requestPersistence();
+  return id;
+}
+
+const updateBeatRaw = (id, changes) => db.beats.update(id, { ...changes, updatedAt: now() });
+
+async function deleteBeatRaw(id) {
+  const beat = await db.beats.get(id);
+  await db.transaction('rw', db.beats, db.audio, db.tracks, async () => {
+    await db.tracks.filter((t) => t.beatId === id).modify({ beatId: null });
+    if (beat?.audioId) await db.audio.delete(beat.audioId);
+    await db.beats.delete(id);
+  });
+}
+
 // ---------- Meta ----------
 const getMetaRaw = async (key) => (await db.meta.get(key))?.value;
 const setMetaRaw = (key, value) => db.meta.put({ key, value });
@@ -171,3 +195,6 @@ export const updateTrack = (...args) => withDb(() => updateTrackRaw(...args));
 export const deleteTrack = (...args) => withDb(() => deleteTrackRaw(...args));
 export const getMeta = (...args) => withDb(() => getMetaRaw(...args));
 export const setMeta = (...args) => withDb(() => setMetaRaw(...args));
+export const addBeat = (...args) => withDb(() => addBeatRaw(...args));
+export const updateBeat = (...args) => withDb(() => updateBeatRaw(...args));
+export const deleteBeat = (...args) => withDb(() => deleteBeatRaw(...args));

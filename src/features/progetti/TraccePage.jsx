@@ -4,6 +4,7 @@ import { useDbQuery } from '../../db/useDbQuery.js';
 import { addTrack, db } from '../../db/db.js';
 import { STATUSES } from '../../constants.js';
 import Icon from '../../components/Icon.jsx';
+import TracksTabs from './TracksTabs.jsx';
 import TrackCard from './TrackCard.jsx';
 
 export default function TraccePage() {
@@ -25,6 +26,8 @@ export default function TraccePage() {
           <Icon name="plus" size={20} /> Nuova
         </button>
       </header>
+
+      <TracksTabs />
 
       <div className="chips scroll-x">
         <button className={`chip${status === 'all' ? ' on' : ''}`} onClick={() => setStatus('all')}>

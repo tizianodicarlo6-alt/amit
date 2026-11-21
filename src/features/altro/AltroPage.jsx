@@ -8,9 +8,8 @@ import { formatDate } from '../../constants.js';
 import Icon from '../../components/Icon.jsx';
 
 const COMING = [
-  { icon: 'beat', title: 'Libreria beat', text: 'Carica e organizza i tuoi beat.', phase: 'Fase 2' },
-  { icon: 'studio', title: 'Studio', text: 'Registra la voce sopra al beat.', phase: 'Fase 2' },
-  { icon: 'allenamento', title: 'Allenamento', text: 'Esercizi di scrittura e freestyle.', phase: 'Fase 3' },
+  { icon: 'studio', title: 'Studio', text: 'Registra la voce sopra al beat.', phase: 'Prossimamente' },
+  { icon: 'allenamento', title: 'Allenamento', text: 'Esercizi di scrittura e freestyle.', phase: 'In futuro' },
 ];
 
 function download(blob, filename) {
@@ -33,6 +32,8 @@ export default function AltroPage() {
   const lastBackup = useDbQuery(() => getMeta('lastBackupAt'), []);
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState('');
+  const [includeBeats, setIncludeBeats] = useState(true);
+  const beatCount = useDbQuery(() => db.beats.count(), [], 0) || 0;
   const [persisted, setPersisted] = useState(null);
   const [usage, setUsage] = useState(null);
   const fileRef = useRef(null);
@@ -49,7 +50,7 @@ export default function AltroPage() {
     setBusy('export');
     setMsg('');
     try {
-      const { blob, filename } = await createBackup();
+      const { blob, filename } = await createBackup({ includeBeats });
       if (share) {
         const file = new File([blob], filename, { type: 'application/json' });
         try {
@@ -83,7 +84,7 @@ export default function AltroPage() {
     setMsg('');
     try {
       const c = await importBackup(file, { replace });
-      setMsg(`Importato: ${c.ideas} idee, ${c.tracks} tracce, ${c.projects} progetti, ${c.audio} audio.`);
+      setMsg(`Importato: ${c.ideas} idee, ${c.tracks} tracce, ${c.projects} progetti, ${c.beats} beat, ${c.audio} file audio.`);
     } catch (err) {
       setMsg(`Errore: ${err.message}`);
     } finally {
@@ -110,13 +111,21 @@ export default function AltroPage() {
         </p>
         {counts && (
           <p className="small">
-            {counts.ideas} idee · {counts.tracks} tracce · {counts.projects} progetti
+            {counts.ideas} idee · {counts.tracks} tracce · {counts.projects} progetti · {beatCount} beat
             {usage ? ` · ${(usage / 1024 / 1024).toFixed(1)} MB` : ''}
           </p>
         )}
         <p className={`small ${daysSince === null || daysSince > 7 ? 'warn' : 'ok'}`}>
           {lastBackup ? `Ultimo backup: ${formatDate(lastBackup)}` : 'Non hai ancora fatto un backup.'}
         </p>
+        {beatCount > 0 && (
+          <label className="check">
+            <input type="checkbox" checked={includeBeats} onChange={(e) => setIncludeBeats(e.target.checked)} />
+            <span>
+              Includi i beat ({beatCount})<span className="muted small"> — il file sarà più pesante</span>
+            </span>
+          </label>
+        )}
         <button className="btn primary big" onClick={() => exportBackup(false)} disabled={!!busy}>
           <Icon name="download" /> {busy === 'export' ? 'Preparo il file…' : 'Scarica backup'}
         </button>

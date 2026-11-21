@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useTapTempo } from '../../components/useTapTempo.js';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useDbQuery } from '../../db/useDbQuery.js';
 import { db, deleteTrack, updateIdea, updateTrack } from '../../db/db.js';
@@ -10,31 +11,20 @@ import { useCapture } from '../../components/CaptureContext.jsx';
 import LyricsEditor from '../editor/LyricsEditor.jsx';
 import IdeaCard from '../taccuino/IdeaCard.jsx';
 import IdeaSheet from '../taccuino/IdeaSheet.jsx';
+import WaveformPlayer from '../../components/WaveformPlayer.jsx';
+import { Link } from 'react-router-dom';
 
-// Calcola i BPM toccando a tempo.
-function useTapTempo(onBpm) {
-  const taps = useRef([]);
-  return () => {
-    const now = performance.now();
-    taps.current = taps.current.filter((t) => now - t < 3000).concat(now);
-    const t = taps.current;
-    if (t.length >= 3) {
-      const avg = (t.at(-1) - t[0]) / (t.length - 1);
-      onBpm(Math.round(60000 / avg));
-    }
-  };
-}
-
-function TrackDetails({ track, projects }) {
+function TrackDetails({ track, projects, beats }) {
   const [form, setForm] = useState({
     title: track.title || '',
     status: track.status || 'idea',
     bpm: track.bpm ?? '',
     projectId: track.projectId || '',
     notes: track.notes || '',
+    beatId: track.beatId || '',
   });
   const status = useAutosave(form, (v) =>
-    updateTrack(track.id, { ...v, bpm: v.bpm === '' ? null : Number(v.bpm), projectId: v.projectId || null })
+    updateTrack(track.id, { ...v, bpm: v.bpm === '' ? null : Number(v.bpm), projectId: v.projectId || null, beatId: v.beatId || null })
   );
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const tap = useTapTempo((bpm) => set('bpm', bpm));
@@ -76,6 +66,35 @@ function TrackDetails({ track, projects }) {
             Tap a tempo
           </button>
         </div>
+      </div>
+      <div className="field">
+        <span className="field-label">Beat</span>
+        {beats.length === 0 ? (
+          <Link to="/beat" className="btn ghost">
+            <Icon name="beat" size={20} /> Importa il tuo primo beat
+          </Link>
+        ) : (
+          <select
+            className="input"
+            value={form.beatId}
+            onChange={(e) => {
+              const b = beats.find((x) => x.id === e.target.value);
+              setForm((f) => ({ ...f, beatId: e.target.value, bpm: f.bpm === '' && b?.bpm ? b.bpm : f.bpm }));
+            }}
+          >
+            <option value="">— Nessun beat —</option>
+            {beats.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.title}
+                {b.bpm ? ` · ${b.bpm} BPM` : ''}
+              </option>
+            ))}
+          </select>
+        )}
+        {form.beatId && (() => {
+          const b = beats.find((x) => x.id === form.beatId);
+          return b ? <WaveformPlayer key={b.id} audioId={b.audioId} peaks={b.peaks} duration={b.duration} /> : null;
+        })()}
       </div>
       <label className="field">
         <span className="field-label">Progetto</span>
@@ -165,6 +184,7 @@ export default function TracciaPage() {
   const navigate = useNavigate();
   const track = useDbQuery(() => db.tracks.get(id), [id]);
   const projects = useDbQuery(() => db.projects.toArray().then((l) => l.sort((a, b) => a.name.localeCompare(b.name))), []) || [];
+  const beats = useDbQuery(() => db.beats.orderBy('createdAt').reverse().toArray(), [], []) || [];
   const ideaCount = useDbQuery(() => db.ideas.where('trackId').equals(id).count(), [id]) || 0;
   const [tab, setTab] = useState('testo');
   const project = useMemo(() => projects.find((p) => p.id === track?.projectId), [projects, track]);
@@ -205,7 +225,7 @@ export default function TracciaPage() {
       {tab === 'testo' && <LyricsEditor key={track.id} track={track} />}
       {tab === 'dettagli' && (
         <>
-          <TrackDetails key={track.id} track={track} projects={projects} />
+          <TrackDetails key={track.id} track={track} projects={projects} beats={beats} />
           <button className="btn danger" onClick={remove}>
             <Icon name="trash" size={20} /> Elimina traccia
           </button>

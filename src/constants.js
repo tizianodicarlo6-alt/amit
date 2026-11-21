@@ -49,3 +49,12 @@ export const formatTime = (sec) => {
   const s = Math.floor(sec % 60);
   return `${m}:${String(s).padStart(2, '0')}`;
 };
+
+export const BEAT_TAGS = ['trap', 'drill', 'boom bap', 'r&b', 'lo-fi', 'afro', 'melodico', 'dark'];
+
+const NOTES = ['Do', 'Do#', 'Re', 'Mib', 'Mi', 'Fa', 'Fa#', 'Sol', 'Lab', 'La', 'Sib', 'Si'];
+const INTL = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+export const KEYS = NOTES.flatMap((n, i) => [
+  { id: `${INTL[i]}m`, label: `${n} minore (${INTL[i]}m)` },
+  { id: INTL[i], label: `${n} maggiore (${INTL[i]})` },
+]);
