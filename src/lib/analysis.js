@@ -261,3 +261,56 @@ export function parseKeyId(id) {
 export function analyzeSamples(samples, sr) {
   return { bpm: detectBpm(samples, sr), key: detectKey(samples, sr) };
 }
+
+// ---------------- Attacco del beat ----------------
+
+/**
+ * Trova "l'attacco": il momento in cui entra la parte piena del beat (cassa/basso),
+ * dopo un'eventuale intro. Ritorna i secondi (0 se il beat parte subito).
+ */
+export function detectAttack(samples, sr) {
+  const a = Math.exp((-2 * Math.PI * 110) / sr); // passa-basso ripido (~110 Hz, 3 stadi): solo cassa e basso
+  const win = Math.round(sr * 0.1);
+  const energies = [];
+  let y1 = 0;
+  let y2 = 0;
+  let y3 = 0;
+  let acc = 0;
+  for (let i = 0; i < samples.length; i++) {
+    y1 = (1 - a) * samples[i] + a * y1;
+    y2 = (1 - a) * y1 + a * y2;
+    y3 = (1 - a) * y2 + a * y3;
+    acc += y3 * y3;
+    if ((i + 1) % win === 0) {
+      energies.push(acc / win);
+      acc = 0;
+    }
+  }
+  if (energies.length < 30) return 0;
+  // media mobile su 1 secondo
+  const sm = energies.map((_, i) => {
+    let s = 0;
+    let n = 0;
+    for (let j = i; j < Math.min(energies.length, i + 10); j++) {
+      s += energies[j];
+      n++;
+    }
+    return s / n;
+  });
+  const sorted = [...sm].sort((x, z) => x - z);
+  const ref = sorted[Math.floor(sorted.length * 0.8)];
+  if (!ref) return 0;
+  let idx = sm.findIndex((v) => v >= ref * 0.45);
+  if (idx <= 5) return 0; // parte subito (entro mezzo secondo)
+  // affino: il salto di energia più netto attorno a quel punto
+  let best = idx;
+  let bestJump = -Infinity;
+  for (let i = Math.max(1, idx - 5); i < Math.min(energies.length, idx + 12); i++) {
+    const jump = energies[i] - energies[i - 1];
+    if (jump > bestJump) {
+      bestJump = jump;
+      best = i;
+    }
+  }
+  return Math.round(best * 0.1 * 100) / 100;
+}

@@ -2,15 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useDbQuery } from '../../db/useDbQuery.js';
 import { addTake, db, updateTrack } from '../../db/db.js';
-import { formatTime, keyShort } from '../../constants.js';
+import { keyShort } from '../../constants.js';
 import Icon from '../../components/Icon.jsx';
 import { usePref } from '../../components/usePref.js';
 import { micErrorMessage } from '../../components/useRecorder.js';
+import { detectAttack } from '../../lib/analysis.js';
+import { toAnalysisSamples } from '../../lib/audio.js';
 import { StudioEngine, takeToWav } from './engine.js';
-import Teleprompter, { buildLines } from './Teleprompter.jsx';
+import Teleprompter from './Teleprompter.jsx';
 import TakesSheet from './TakesSheet.jsx';
 import StudioSettings from './StudioSettings.jsx';
-import { FX_ORDER, FX_PRESETS } from './fx.js';
+import StructureSheet from './StructureSheet.jsx';
+import BeatTimeline from './BeatTimeline.jsx';
+import { FX_ORDER, FX_PRESETS, dbToGain } from './fx.js';
+import { buildTimeline, lineAt, nextBlockAfter, snapToBeat } from './timeline.js';
 
 export default function StudioPage() {
   const { id } = useParams();
@@ -26,43 +31,53 @@ export default function StudioPage() {
   const engine = engineRef.current;
 
   const [beatBuf, setBeatBuf] = useState(null);
+  const [autoAttack, setAutoAttack] = useState(0);
   const [beatError, setBeatError] = useState('');
   const [mode, setMode] = useState('idle'); // idle | starting | recording | saving | playing
   const modeRef = useRef('idle');
   const [pos, setPos] = useState(0);
+  const [pre, setPre] = useState(0); // secondi di conteggio rimasti
   const [error, setError] = useState('');
   const [flash, setFlash] = useState('');
   const [selectedTake, setSelectedTake] = useState(null);
-  const [startLine, setStartLine] = useState(null);
-  const [sheet, setSheet] = useState(null); // 'takes' | 'settings'
+  const [startAt, setStartAt] = useState(0); // da dove partono beat e registrazione
+  const [selectedLine, setSelectedLine] = useState(null);
+  const [sheet, setSheet] = useState(null); // 'takes' | 'settings' | 'structure'
+  const [sync, setSync] = useState(null); // { queue: [blockId...], marked: n } durante "Segna a orecchio"
   const recRef = useRef(null);
   const rafRef = useRef(0);
 
-  // Impostazioni (salvate sul telefono)
+  // Impostazioni salvate sul telefono
   const [countIn, setCountIn] = usePref('studio.countIn', true);
   const [latencyMs, setLatencyMs] = usePref('studio.latencyMs', null);
-  const [beatVol, setBeatVol] = usePref('studio.beatVol', 0.85);
-  const [voiceVol, setVoiceVol] = usePref('studio.voiceVol', 1);
+  const [beatVol, setBeatVol] = usePref('studio.beatVol', 0.8);
+  const [voiceDb, setVoiceDb] = usePref('studio.voiceDb', 2);
   const [fontSize, setFontSize] = usePref('studio.fontSize', 24);
   const [tipSeen, setTipSeen] = usePref('studio.headphonesTip', false);
 
+  const voiceGain = dbToGain(voiceDb);
   const latency = (latencyMs ?? Math.round(engine.estimatedLatency() * 1000)) / 1000;
   const bpm = Number(track?.bpm) || Number(beat?.bpm) || 0;
-  const barDur = bpm ? 240 / bpm : 2.4;
-  const introBars = track?.studio?.introBars ?? 0;
-  const barsPerLine = track?.studio?.barsPerLine ?? 1;
-  const fx = FX_PRESETS[track?.studio?.fx] ? track.studio.fx : 'provino';
-  const setTrackStudio = (changes) => updateTrack(id, { studio: { ...(track?.studio || {}), introBars, barsPerLine, fx, ...changes } });
-  const lineCount = useMemo(() => buildLines(track?.sections).count, [track?.sections]);
-  const lineTime = useCallback((i) => (introBars + i * barsPerLine) * barDur, [introBars, barsPerLine, barDur]);
-  const from = startLine == null ? 0 : Math.max(0, lineTime(startLine) - barDur); // 1 battuta di "rincorsa"
+  const beatDur = bpm ? 60 / bpm : 0.6;
+  const barDur = beatDur * 4;
+
+  // Struttura (per traccia)
+  const st = track?.studio || {};
+  const fx = FX_PRESETS[st.fx] ? st.fx : 'provino';
+  const barsPerLine = st.barsPerLine ?? 1;
+  const starts = st.starts || {};
+  const attackAuto = st.attack == null && st.introBars == null;
+  const attack = st.attack ?? (st.introBars != null ? st.introBars * barDur : autoAttack);
+  const setTrackStudio = (changes) => updateTrack(id, { studio: { ...st, fx, barsPerLine, ...changes } });
+
+  const timeline = useMemo(() => buildTimeline(track?.sections, { starts, attack, barDur, barsPerLine }), [track?.sections, starts, attack, barDur, barsPerLine]);
 
   const setModeBoth = (m) => {
     modeRef.current = m;
     setMode(m);
   };
 
-  // Carico il beat in memoria
+  // Carico il beat e trovo l'attacco
   useEffect(() => {
     let alive = true;
     setBeatBuf(null);
@@ -73,7 +88,13 @@ export default function StudioPage() {
         const rec = await db.audio.get(beat.audioId);
         if (!rec?.blob) throw new Error('missing');
         const buf = await engine.loadBuffer(beat.audioId, rec.blob);
-        if (alive) setBeatBuf(buf);
+        if (!alive) return;
+        setBeatBuf(buf);
+        try {
+          setAutoAttack(detectAttack(toAnalysisSamples(buf), 11025));
+        } catch {
+          setAutoAttack(0);
+        }
       } catch {
         if (alive) setBeatError('Non riesco a caricare il file di questo beat.');
       }
@@ -83,13 +104,11 @@ export default function StudioPage() {
     };
   }, [beat, engine]);
 
-  // Take selezionata: la preferita o l'ultima
   useEffect(() => {
     if (selectedTake && takes.some((t) => t.id === selectedTake)) return;
     setSelectedTake((takes.find((t) => t.favorite) || takes[0])?.id || null);
   }, [takes, selectedTake]);
 
-  // Pulizia uscendo dallo studio
   useEffect(
     () => () => {
       cancelAnimationFrame(rafRef.current);
@@ -106,6 +125,11 @@ export default function StudioPage() {
     return () => clearTimeout(t);
   }, [flash]);
 
+  // Volume voce dal vivo
+  useEffect(() => {
+    engine.setGains({ voiceGain, beatGain: beatVol });
+  }, [engine, voiceGain, beatVol]);
+
   const loadTakeBuffer = async (take) => {
     if (engine.buffers.has(take.audioId)) return engine.buffers.get(take.audioId);
     const rec = await db.audio.get(take.audioId);
@@ -115,6 +139,7 @@ export default function StudioPage() {
 
   const stopAll = useCallback(async () => {
     cancelAnimationFrame(rafRef.current);
+    setSync(null);
     if (modeRef.current === 'recording' && recRef.current) {
       setModeBoth('saving');
       const handle = recRef.current;
@@ -146,6 +171,7 @@ export default function StudioPage() {
     const p = engine.position();
     if (p == null) return;
     setPos(p);
+    setPre(engine.countInLeft());
     const end = engine.playing?.length ?? 0;
     if (p > end + 0.3) {
       stopAll();
@@ -161,7 +187,7 @@ export default function StudioPage() {
     setError('');
     setModeBoth('starting');
     try {
-      recRef.current = await engine.record({ beat: beatBuf, from, beatGain: beatVol, countIn: countIn && bpm ? 4 : 0, bpm });
+      recRef.current = await engine.record({ beat: beatBuf, from: startAt, beatGain: beatVol, countIn: countIn && bpm ? 4 : 0, bpm });
       setModeBoth('recording');
       rafRef.current = requestAnimationFrame(tick);
     } catch (e) {
@@ -170,41 +196,120 @@ export default function StudioPage() {
     }
   };
 
-  const onPlay = async (takeId = selectedTake, opts = {}) => {
-    if (modeRef.current === 'playing') return stopAll();
-    if (modeRef.current !== 'idle' || !beatBuf) return;
+  const playFrom = async (from, { takeId = selectedTake, fxId = fx, beatOnly = false } = {}) => {
+    if (!beatBuf) return;
     engine.unlock();
+    cancelAnimationFrame(rafRef.current);
+    engine.stop();
     setError('');
     try {
-      const take = takes.find((t) => t.id === takeId);
+      const take = beatOnly ? null : takes.find((t) => t.id === takeId);
       const voice = take ? { buffer: await loadTakeBuffer(take), offset: take.offset } : null;
-      engine.play({ beat: beatBuf, voice, from: opts.from ?? from, beatGain: beatVol, voiceGain: voiceVol, latency, bpm, fx: opts.fx || fx });
+      engine.play({ beat: beatBuf, voice, from, beatGain: beatVol, voiceGain, latency, bpm, fx: fxId });
       setModeBoth('playing');
       rafRef.current = requestAnimationFrame(tick);
     } catch (e) {
       setError(`Non riesco a riprodurre (${e?.message || e}).`);
+      setModeBoth('idle');
     }
   };
 
-  // Cambio effetto: se sta suonando, riparte da dov'era con il nuovo suono
+  const onPlay = () => {
+    if (modeRef.current === 'playing') return stopAll();
+    if (modeRef.current !== 'idle') return;
+    playFrom(startAt);
+  };
+
+  // Tocco sulla forma d'onda: se suona salta lì, se è fermo sceglie da dove partire
+  const onSeek = (t) => {
+    if (modeRef.current === 'playing' && !sync) return playFrom(t);
+    if (modeRef.current !== 'idle') return;
+    setStartAt(t);
+    setPos(t);
+    setSelectedLine(null);
+  };
+
+  // Tocco su una riga/sezione: parto 1 battuta prima
+  const onPickLine = (i) => {
+    if (modeRef.current !== 'idle') return;
+    if (selectedLine === i) {
+      setSelectedLine(null);
+      setStartAt(0);
+      setPos(0);
+      return;
+    }
+    const t = Math.max(0, timeline.lines[i].time - barDur);
+    setSelectedLine(i);
+    setStartAt(t);
+    setPos(t);
+  };
+
   const changeFx = (v) => {
     setTrackStudio({ fx: v });
-    if (modeRef.current === 'playing') {
-      const p = Math.max(0, engine.position() || 0);
-      cancelAnimationFrame(rafRef.current);
-      engine.stop();
-      setModeBoth('idle');
-      onPlay(selectedTake, { from: p, fx: v });
-    }
+    if (modeRef.current === 'playing') playFrom(Math.max(0, engine.position() || 0), { fxId: v });
+  };
+
+  // "Segna a orecchio": parte il beat, tocchi quando inizia ogni sezione
+  const startSync = () => {
+    if (!beatBuf || !timeline.blocks.length) return;
+    setSync({ queue: timeline.blocks.map((b) => b.id), marked: 0 });
+    playFrom(0, { beatOnly: true });
+  };
+  const markSync = () => {
+    if (!sync) return;
+    const p = engine.position() ?? 0;
+    const [blockId, ...rest] = sync.queue;
+    const isFirst = sync.marked === 0;
+    const anchor = isFirst ? 0 : attack;
+    const t = isFirst ? Math.max(0, p - 0.08) : snapToBeat(p - 0.08, anchor, beatDur); // 80 ms: tempo di reazione
+    if (isFirst) {
+      const nextStarts = { ...starts };
+      delete nextStarts[blockId];
+      setTrackStudio({ attack: Math.round(t * 100) / 100, starts: nextStarts, introBars: null });
+    } else setTrackStudio({ starts: { ...starts, [blockId]: t } });
+    if (!rest.length) {
+      stopAll();
+      setFlash('Struttura salvata ✓');
+    } else setSync({ queue: rest, marked: sync.marked + 1 });
   };
 
   if (track === undefined) return <div className="studio" />;
   if (!track) return <div className="page empty">Traccia non trovata.</div>;
 
   const active = mode === 'recording' || mode === 'playing';
-  const current = active ? Math.floor((pos / barDur - introBars) / barsPerLine) : startLine ?? -1;
+  const counting = active && pre > 0.02;
+  const current = active && !sync && !counting ? lineAt(pos, timeline) : -1;
   const duration = beatBuf?.duration || beat?.duration || 0;
   const take = takes.find((t) => t.id === selectedTake);
+  const syncLabel = sync ? timeline.blocks.find((b) => b.id === sync.queue[0])?.label : null;
+
+  // Conto alla rovescia durante intro e pause
+  let overlay = null;
+  if (counting) {
+    overlay = (
+      <>
+        <span className="muted">{mode === 'recording' ? 'Si registra tra' : 'Parte tra'}</span>
+        <span className="big-count">{Math.ceil(pre / beatDur)}</span>
+      </>
+    );
+  } else if (active && !sync && current < 0) {
+    const next = nextBlockAfter(pos, timeline);
+    if (next) {
+      const beatsLeft = Math.ceil((next.start - pos) / beatDur);
+      overlay =
+        beatsLeft <= 8 ? (
+          <>
+            <span className="muted">{next.label} tra</span>
+            <span className="big-count">{beatsLeft}</span>
+          </>
+        ) : (
+          <span className="muted">
+            {pos < timeline.blocks[0]?.start ? 'Intro del beat' : 'Pausa'} · {next.label} tra {Math.ceil((next.start - pos) / barDur)} battute
+          </span>
+        );
+    }
+  }
+  if (sync) overlay = <span className="muted">Tocca il pulsante quando inizia la sezione</span>;
 
   return (
     <div className={`studio${mode === 'recording' ? ' is-rec' : ''}`}>
@@ -216,9 +321,12 @@ export default function StudioPage() {
           <div className="studio-kicker">Studio</div>
           <div className="studio-track ellipsis">{track.title || 'Senza titolo'}</div>
         </div>
-        <button className="icon-btn" onClick={() => setSheet('settings')} aria-label="Impostazioni studio" disabled={active}>
-          <Icon name="gear" />
-        </button>
+        {beat && (
+          <span className="muted small studio-meta">
+            {bpm ? `${bpm} BPM` : 'BPM ?'}
+            {beat.key ? ` · ${keyShort(beat.key)}` : ''}
+          </span>
+        )}
       </header>
 
       {!beatId || beat === null ? (
@@ -241,25 +349,19 @@ export default function StudioPage() {
           )}
         </div>
       ) : (
-        <div className="studio-beat">
-          <div className="row between">
-            <span className="ellipsis">
-              <b>{beat?.title}</b>
-              <span className="muted small">
-                {bpm ? ` · ${bpm} BPM` : ''}
-                {beat?.key ? ` · ${keyShort(beat.key)}` : ''}
-              </span>
-            </span>
-            <span className="studio-time">
-              {mode === 'recording' && <span className="rec-dot" />}
-              {pos < 0 ? `-${Math.ceil(-pos / (60 / (bpm || 120)))}` : formatTime(active ? pos : from)} / {formatTime(duration)}
-            </span>
-          </div>
-          <div className="studio-progress">
-            <div style={{ width: `${duration ? Math.min(100, (Math.max(0, active ? pos : from) / duration) * 100) : 0}%` }} />
-          </div>
+        <>
+          <BeatTimeline
+            peaks={beat?.peaks}
+            duration={duration}
+            position={active ? pos : startAt}
+            startAt={startAt}
+            blocks={timeline.blocks}
+            onSeek={onSeek}
+            disabled={mode === 'recording' || mode === 'starting' || mode === 'saving'}
+            recording={mode === 'recording'}
+          />
           {beatError && <p className="error small">{beatError}</p>}
-        </div>
+        </>
       )}
 
       {!tipSeen && (
@@ -268,25 +370,18 @@ export default function StudioPage() {
         </div>
       )}
 
-      <Teleprompter
-        sections={track.sections}
-        current={current}
-        following={active}
-        startLine={startLine}
-        fontSize={fontSize}
-        onPickLine={(i) => !active && setStartLine(startLine === i ? null : i)}
-      />
+      <Teleprompter timeline={timeline} current={current} following={active} selectedLine={selectedLine} fontSize={fontSize} onPickLine={onPickLine} overlay={overlay} />
 
       <div className="studio-hint muted small">
-        {active
-          ? bpm
-            ? `Una barra ogni ${barsPerLine === 1 ? 'battuta' : `${barsPerLine} battute`}`
-            : 'Imposta il BPM della traccia per far scorrere il testo a tempo'
-          : startLine != null
-            ? `Parti dalla riga ${startLine + 1} (${formatTime(from)}) — tocca di nuovo la riga per ripartire dall'inizio`
-            : lineCount
-              ? 'Tocca una riga per partire da lì'
-              : ''}
+        {sync
+          ? ''
+          : active
+            ? ''
+            : selectedLine != null
+              ? `Parti da qui (1 battuta prima). Tocca di nuovo la riga per tornare all'inizio.`
+              : timeline.lines.length
+                ? 'Tocca una riga o una sezione per partire da lì · tocca la forma d\'onda per spostarti'
+                : ''}
       </div>
 
       {error && (
@@ -296,41 +391,66 @@ export default function StudioPage() {
       )}
       {flash && <div className="studio-flash">{flash}</div>}
 
-      {takes.length > 0 && mode !== 'recording' && (
-        <div className="fx-bar">
-          <span className="fx-label">Effetti voce</span>
-          <div className="chips scroll-x fx-chips">
-            {FX_ORDER.map((k) => (
-              <button key={k} className={`chip${fx === k ? ' on' : ''}`} onClick={() => changeFx(k)}>
-                {FX_PRESETS[k].label}
-              </button>
-            ))}
+      {takes.length > 0 && mode !== 'recording' && !sync && (
+        <div className="mixbar">
+          <div className="fx-bar">
+            <span className="fx-label">Effetti</span>
+            <div className="chips scroll-x fx-chips">
+              {FX_ORDER.map((k) => (
+                <button key={k} className={`chip${fx === k ? ' on' : ''}`} onClick={() => changeFx(k)}>
+                  {FX_PRESETS[k].label}
+                </button>
+              ))}
+            </div>
           </div>
+          <label className="vol-row">
+            <span className="fx-label">Voce sul beat</span>
+            <input className="slider" type="range" min={-6} max={12} step={0.5} value={voiceDb} onChange={(e) => setVoiceDb(Number(e.target.value))} />
+            <span className="small vol-val">
+              {voiceDb > 0 ? '+' : ''}
+              {voiceDb} dB
+            </span>
+          </label>
         </div>
       )}
 
-      <div className="transport">
-        <button className="t-btn" onClick={() => setSheet('takes')} disabled={active}>
-          <span className="t-count">{takes.length}</span>
-          <span>Take</span>
-        </button>
-        <button className="t-btn" onClick={() => onPlay()} disabled={!beatBuf || mode === 'recording' || mode === 'starting' || mode === 'saving'}>
-          <Icon name={mode === 'playing' ? 'stop' : 'play'} size={26} />
-          <span>{mode === 'playing' ? 'Stop' : take ? 'Ascolta' : 'Beat'}</span>
-        </button>
-        <button
-          className={`rec-main${mode === 'recording' ? ' on' : ''}`}
-          onClick={onRec}
-          disabled={!beatBuf || mode === 'playing' || mode === 'saving' || mode === 'starting'}
-          aria-label={mode === 'recording' ? 'Ferma registrazione' : 'Registra'}
-        >
-          {mode === 'recording' ? <Icon name="stop" size={30} /> : mode === 'saving' || mode === 'starting' ? <span className="spinner big" /> : <span className="rec-core" />}
-        </button>
-        <button className="t-btn" onClick={() => setSheet('settings')} disabled={active}>
-          <Icon name="gear" size={24} />
-          <span>Regola</span>
-        </button>
-      </div>
+      {sync ? (
+        <div className="transport sync">
+          <button className="btn ghost" onClick={stopAll}>
+            Annulla
+          </button>
+          <button className="btn primary big sync-btn" onClick={markSync}>
+            ▼ {syncLabel} parte ORA
+          </button>
+        </div>
+      ) : (
+        <div className="transport">
+          <button className="t-btn" onClick={() => setSheet('takes')} disabled={active}>
+            <span className="t-count">{takes.length}</span>
+            <span>Take</span>
+          </button>
+          <button className="t-btn" onClick={onPlay} disabled={!beatBuf || mode === 'recording' || mode === 'starting' || mode === 'saving'}>
+            <Icon name={mode === 'playing' ? 'stop' : 'play'} size={26} />
+            <span>{mode === 'playing' ? 'Stop' : take ? 'Ascolta' : 'Beat'}</span>
+          </button>
+          <button
+            className={`rec-main${mode === 'recording' ? ' on' : ''}`}
+            onClick={onRec}
+            disabled={!beatBuf || mode === 'playing' || mode === 'saving' || mode === 'starting'}
+            aria-label={mode === 'recording' ? 'Ferma registrazione' : 'Registra'}
+          >
+            {mode === 'recording' ? <Icon name="stop" size={30} /> : mode === 'saving' || mode === 'starting' ? <span className="spinner big" /> : <span className="rec-core" />}
+          </button>
+          <button className="t-btn" onClick={() => setSheet('structure')} disabled={active}>
+            <Icon name="beat" size={24} />
+            <span>Struttura</span>
+          </button>
+          <button className="t-btn" onClick={() => setSheet('settings')} disabled={active}>
+            <Icon name="gear" size={24} />
+            <span>Regola</span>
+          </button>
+        </div>
+      )}
 
       {sheet === 'takes' && (
         <TakesSheet
@@ -342,15 +462,34 @@ export default function StudioPage() {
           onPlay={(tid) => {
             setSelectedTake(tid);
             setSheet(null);
-            setTimeout(() => onPlay(tid), 0);
+            setTimeout(() => playFrom(startAt, { takeId: tid }), 0);
           }}
           engine={engine}
           loadTakeBuffer={loadTakeBuffer}
           latency={latency}
           beatVol={beatVol}
-          voiceVol={voiceVol}
+          voiceVol={voiceGain}
           fx={fx}
           bpm={bpm}
+          onClose={() => setSheet(null)}
+        />
+      )}
+      {sheet === 'structure' && (
+        <StructureSheet
+          timeline={timeline}
+          attack={attack}
+          attackAuto={attackAuto}
+          autoAttack={autoAttack}
+          barDur={barDur}
+          barsPerLine={barsPerLine}
+          starts={starts}
+          onChange={(c) => setTrackStudio({ ...c, introBars: null })}
+          onListen={(t) => {
+            setSheet(null);
+            setStartAt(t);
+            playFrom(t, { beatOnly: true });
+          }}
+          onSync={startSync}
           onClose={() => setSheet(null)}
         />
       )}
@@ -363,13 +502,8 @@ export default function StudioPage() {
           setLatencyMs={setLatencyMs}
           beatVol={beatVol}
           setBeatVol={setBeatVol}
-          voiceVol={voiceVol}
-          setVoiceVol={setVoiceVol}
           fontSize={fontSize}
           setFontSize={setFontSize}
-          introBars={introBars}
-          barsPerLine={barsPerLine}
-          setTrackStudio={setTrackStudio}
           bpm={bpm}
           setBpm={(v) => updateTrack(id, { bpm: v })}
         />

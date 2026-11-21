@@ -67,3 +67,24 @@ test('Camelot e nomi in inglese', () => {
   assert.deepEqual(parseKeyId('F#m'), { id: 'F#m', label: 'F# Minor', camelot: '11A' });
   assert.equal(parseKeyId('xyz'), null);
 });
+
+test('Attacco: intro senza batteria poi entra il beat', async () => {
+  const { detectAttack } = await import('./analysis.js');
+  const intro = chords([[57, 60, 64]], 8).map((v) => v * 0.5); // 8 s solo accordo
+  const body = drums(90, 20);
+  const all = new Float32Array(intro.length + body.length);
+  all.set(intro);
+  all.set(body, intro.length);
+  for (let i = 0; i < body.length; i++) all[intro.length + i] += Math.sin((2 * Math.PI * 220 * i) / SR) * 0.1;
+  const t = detectAttack(all, SR);
+  assert.ok(Math.abs(t - 8) <= 0.3, `atteso ~8 s, trovato ${t}`);
+  assert.equal(detectAttack(drums(90, 20), SR), 0); // beat che parte subito
+  // intro con un "pad" che continua anche dopo (caso tipico)
+  const pad = (n) => Array.from({ length: n }, (_, i) => 0.18 * Math.sin((2 * Math.PI * 220 * i) / SR) + 0.1 * Math.sin((2 * Math.PI * 261.6 * i) / SR));
+  const b2 = drums(90, 24);
+  const withPad = new Float32Array(SR * 8 + b2.length);
+  withPad.set(pad(withPad.length));
+  for (let i = 0; i < b2.length; i++) withPad[SR * 8 + i] += b2[i];
+  const t2 = detectAttack(withPad, SR);
+  assert.ok(Math.abs(t2 - 8) <= 0.3, `pad: atteso ~8 s, trovato ${t2}`);
+});

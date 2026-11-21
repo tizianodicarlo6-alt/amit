@@ -54,8 +54,8 @@ export const FX_PRESETS = {
 
 export const FX_ORDER = ['pulita', 'provino', 'trap', 'spazio'];
 
-/** Guadagno per portare la voce a un livello costante (circa -20 dBFS RMS). */
-export function levelGainFor(buffer) {
+/** Volume medio (RMS) delle parti "attive" di un audio, ignorando i silenzi. */
+export function activeRms(buffer) {
   const d = buffer.getChannelData(0);
   let sum = 0;
   let n = 0;
@@ -71,9 +71,32 @@ export function levelGainFor(buffer) {
       n++;
     }
   }
-  if (!n) return 1;
-  const rms = Math.sqrt(sum / n);
-  return Math.max(0.5, Math.min(8, 0.1 / rms));
+  return n ? Math.sqrt(sum / n) : 0;
+}
+
+/** Guadagno che porta la voce al volume `target` (RMS), con limiti di sicurezza. */
+export function levelGainFor(buffer, target = 0.1) {
+  const rms = activeRms(buffer);
+  if (!rms) return 1;
+  return Math.max(0.5, Math.min(12, target / rms));
+}
+
+export const dbToGain = (db) => Math.pow(10, db / 20);
+
+/** Il beat "fa spazio" alla voce: piccolo taglio sulle frequenze della voce. */
+export function buildBeatCarve(ctx) {
+  const mid = ctx.createBiquadFilter();
+  mid.type = 'peaking';
+  mid.frequency.value = 2800;
+  mid.Q.value = 0.9;
+  mid.gain.value = -3;
+  const lowmid = ctx.createBiquadFilter();
+  lowmid.type = 'peaking';
+  lowmid.frequency.value = 450;
+  lowmid.Q.value = 1;
+  lowmid.gain.value = -1.5;
+  mid.connect(lowmid);
+  return { input: mid, output: lowmid };
 }
 
 const irCache = new WeakMap();
@@ -181,14 +204,21 @@ export function buildVoiceChain(ctx, presetId = 'provino', { bpm = 0, level = 1 
   return { input, output };
 }
 
-/** Limitatore finale: evita che il mix "spacchi" (distorsione). */
+/** Bus finale: leggera compressione "colla" (voce e beat suonano insieme) + limitatore. */
 export function buildMaster(ctx) {
+  const glue = ctx.createDynamicsCompressor();
+  glue.threshold.value = -16;
+  glue.knee.value = 10;
+  glue.ratio.value = 2;
+  glue.attack.value = 0.02;
+  glue.release.value = 0.25;
   const lim = ctx.createDynamicsCompressor();
   lim.threshold.value = -1.5;
   lim.knee.value = 0;
   lim.ratio.value = 20;
   lim.attack.value = 0.002;
   lim.release.value = 0.08;
+  glue.connect(lim);
   lim.connect(ctx.destination);
-  return lim;
+  return glue;
 }

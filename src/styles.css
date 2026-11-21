@@ -273,10 +273,12 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .studio.is-rec .studio-progress div { background: #ff3b3b; }
 .studio-nobeat { padding: 12px 0; }
 .studio-tip { margin: 4px 0; font-size: 14px; }
+.prompter-wrap { flex: 1; position: relative; min-height: 0; display: flex; }
 .prompter { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; font-weight: 700; line-height: 1.35; padding: 0 4px; mask-image: linear-gradient(transparent, #000 12%, #000 88%, transparent); -webkit-mask-image: linear-gradient(transparent, #000 12%, #000 88%, transparent); }
 .prompter.empty { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 6px; font-size: 16px; font-weight: 400; mask-image: none; -webkit-mask-image: none; }
 .prompter-pad { height: 35%; }
-.prompter-label { font-family: var(--display); text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px; color: var(--muted); margin: 18px 0 6px; font-weight: 500; }
+.prompter-label { display: block; border: 0; background: transparent; padding: 4px 8px; font-family: var(--display); text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px; color: var(--muted); margin: 18px 0 4px; font-weight: 500; }
+.prompter-label span { letter-spacing: 0.05em; opacity: 0.7; }
 .prompter-line { padding: 6px 8px; border-radius: 10px; color: #8a8a92; transition: color 0.2s, background 0.2s, transform 0.2s; cursor: pointer; }
 .prompter-line.done { color: #4a4a52; }
 .prompter-line.now { color: #fff; background: #1c1c20; transform: scale(1.02); transform-origin: left center; }
@@ -304,3 +306,29 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .fx-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); font-weight: 700; flex: none; }
 .fx-chips { margin: 0; padding: 0; flex: 1; }
 .fx-chips .chip { min-height: 34px; padding: 0 12px; font-size: 13px; }
+
+.studio-meta { flex: none; }
+.btl { padding: 4px 0 6px; }
+.btl.disabled { opacity: 0.85; }
+.btl-wave { position: relative; height: 64px; touch-action: none; cursor: pointer; margin-top: 16px; }
+.btl-wave svg { width: 100%; height: 100%; display: block; }
+.btl-wave rect { fill: #3a3a40; }
+.btl-wave rect.pl { fill: #fff; }
+.btl-mark { position: absolute; top: -16px; bottom: 0; border-left: 1px dashed #8f8f98; pointer-events: none; }
+.btl-mark.explicit { border-left-style: solid; border-color: #fff; }
+.btl-mark span { position: absolute; top: 0; left: 3px; font-size: 9px; white-space: nowrap; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.btl-start { position: absolute; top: 0; bottom: 0; width: 2px; background: #4c9aff; pointer-events: none; }
+.btl-head { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 8px rgba(255,255,255,.6); pointer-events: none; }
+.btl-head.rec { background: #ff3b3b; box-shadow: 0 0 8px rgba(255,59,59,.8); }
+.btl-times { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.prompter-overlay { position: absolute; left: 50%; top: 14%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; text-align: center; font-size: 15px; font-weight: 600; background: #0c0c0e; z-index: 3; border: 1px solid var(--border); border-radius: 18px; padding: 12px 22px; max-width: calc(100% - 24px); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8); }
+.big-count { font-family: var(--display); font-size: 72px; line-height: 1; color: #fff; }
+.mixbar { display: flex; flex-direction: column; gap: 2px; }
+.vol-row { display: flex; align-items: center; gap: 10px; }
+.vol-row .slider { flex: 1; height: 28px; }
+.vol-val { min-width: 54px; text-align: right; font-variant-numeric: tabular-nums; }
+.transport.sync { justify-content: space-between; }
+.sync-btn { flex: 1; min-height: 72px; font-size: 18px; text-transform: uppercase; font-family: var(--display); letter-spacing: 0.04em; }
+.struct-row { display: flex; flex-direction: column; gap: 10px; }
+.struct-head { display: flex; align-items: center; gap: 8px; }
+.mono { font-variant-numeric: tabular-nums; }

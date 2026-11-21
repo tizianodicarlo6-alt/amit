@@ -13,30 +13,11 @@ function Slider({ label, value, min, max, step, onChange, format }) {
   );
 }
 
-function Stepper({ label, value, min = 0, max = 64, onChange, hint }) {
-  return (
-    <div className="field">
-      <span className="field-label">{label}</span>
-      <div className="stepper">
-        <button className="btn" onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min}>
-          −
-        </button>
-        <span className="stepper-value">{value}</span>
-        <button className="btn" onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max}>
-          +
-        </button>
-      </div>
-      {hint && <span className="muted small">{hint}</span>}
-    </div>
-  );
-}
-
 export default function StudioSettings(p) {
   const tap = useTapTempo((b) => p.setBpm(b));
   return (
     <Sheet open onClose={p.onClose} title="Regola lo studio">
       <div className="stack">
-        <h2>Testo che scorre</h2>
         <div className="field">
           <span className="field-label">BPM della traccia</span>
           <div className="row">
@@ -45,25 +26,7 @@ export default function StudioSettings(p) {
               Tap a tempo
             </button>
           </div>
-        </div>
-        <Stepper
-          label="Battute di intro prima del testo"
-          value={p.introBars}
-          onChange={(v) => p.setTrackStudio({ introBars: v })}
-          hint="Quante battute suona il beat prima che inizi la prima barra (di solito 4 o 8)."
-        />
-        <div className="field">
-          <span className="field-label">Velocità</span>
-          <div className="chips">
-            {[
-              [1, '1 barra = 1 battuta'],
-              [2, '1 barra = 2 battute'],
-            ].map(([v, l]) => (
-              <button key={v} className={`chip${p.barsPerLine === v ? ' on' : ''}`} onClick={() => p.setTrackStudio({ barsPerLine: v })}>
-                {l}
-              </button>
-            ))}
-          </div>
+          <span className="muted small">Serve per far scorrere il testo a tempo e per il delay degli effetti.</span>
         </div>
         <div className="field">
           <span className="field-label">Grandezza testo</span>
@@ -79,9 +42,6 @@ export default function StudioSettings(p) {
             ))}
           </div>
         </div>
-
-        <div className="divider" />
-        <h2>Registrazione</h2>
         <label className="check">
           <input type="checkbox" checked={p.countIn} onChange={(e) => p.setCountIn(e.target.checked)} />
           <span>
@@ -89,7 +49,6 @@ export default function StudioSettings(p) {
           </span>
         </label>
         <Slider label="Volume beat" value={p.beatVol} min={0} max={1} step={0.05} onChange={p.setBeatVol} format={(v) => `${Math.round(v * 100)}%`} />
-        <Slider label="Volume voce (riascolto e mix)" value={p.voiceVol} min={0} max={2} step={0.05} onChange={p.setVoiceVol} format={(v) => `${Math.round(v * 100)}%`} />
 
         <div className="divider" />
         <h2>Ritardo cuffie</h2>

@@ -1,31 +1,23 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { sectionLabel } from '../../constants.js';
-
-/** Prepara le righe: ogni barra non vuota ha un numero progressivo. */
-export function buildLines(sections = []) {
-  const items = [];
-  let n = 0;
-  for (const s of sections) {
-    const lines = s.text.split('\n').filter((l) => l.trim());
-    if (!lines.length) continue;
-    items.push({ kind: 'label', key: `l-${s.id}`, text: sectionLabel(s.type) });
-    for (const [i, l] of lines.entries()) items.push({ kind: 'line', key: `${s.id}-${i}`, text: l, index: n++ });
-  }
-  return { items, count: n };
-}
+import { useEffect, useRef } from 'react';
+import { formatTime } from '../../constants.js';
 
 // Il "gobbo": testo grande, riga corrente evidenziata, scorre da solo a tempo.
-export default function Teleprompter({ sections, current, following, onPickLine, startLine, fontSize = 24 }) {
-  const { items, count } = useMemo(() => buildLines(sections), [sections]);
+export default function Teleprompter({ timeline, current, following, onPickLine, selectedLine, fontSize = 24, overlay }) {
+  const { lines, blocks } = timeline;
   const refs = useRef(new Map());
 
   useEffect(() => {
     if (!following || current < 0) return;
-    const el = refs.current.get(Math.min(current, count - 1));
-    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, [current, following, count]);
+    refs.current.get(current)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [current, following]);
 
-  if (!count) {
+  // quando scelgo da dove partire, porto la riga in vista
+  useEffect(() => {
+    if (selectedLine == null) return;
+    refs.current.get(selectedLine)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [selectedLine]);
+
+  if (!lines.length) {
     return (
       <div className="prompter empty">
         <p>Questa traccia non ha ancora un testo.</p>
@@ -35,25 +27,29 @@ export default function Teleprompter({ sections, current, following, onPickLine,
   }
 
   return (
-    <div className="prompter" style={{ fontSize }}>
-      <div className="prompter-pad" />
-      {items.map((it) =>
-        it.kind === 'label' ? (
-          <div key={it.key} className="prompter-label">
-            {it.text}
+    <div className="prompter-wrap">
+      <div className="prompter" style={{ fontSize }}>
+        <div className="prompter-pad" />
+        {blocks.map((b) => (
+          <div key={b.id} className="prompter-block">
+            <button className="prompter-label" onClick={() => onPickLine?.(b.first)}>
+              {b.label} <span>· {formatTime(b.start)}</span>
+            </button>
+            {lines.slice(b.first, b.first + b.count).map((l) => (
+              <div
+                key={l.index}
+                ref={(el) => (el ? refs.current.set(l.index, el) : refs.current.delete(l.index))}
+                className={`prompter-line${l.index === current ? ' now' : ''}${current >= 0 && l.index < current ? ' done' : ''}${l.index === selectedLine ? ' start' : ''}`}
+                onClick={() => onPickLine?.(l.index)}
+              >
+                {l.text}
+              </div>
+            ))}
           </div>
-        ) : (
-          <div
-            key={it.key}
-            ref={(el) => (el ? refs.current.set(it.index, el) : refs.current.delete(it.index))}
-            className={`prompter-line${it.index === current ? ' now' : ''}${it.index < current ? ' done' : ''}${it.index === startLine ? ' start' : ''}`}
-            onClick={() => onPickLine?.(it.index)}
-          >
-            {it.text}
-          </div>
-        )
-      )}
-      <div className="prompter-pad" />
+        ))}
+        <div className="prompter-pad" />
+      </div>
+      {overlay && <div className="prompter-overlay">{overlay}</div>}
     </div>
   );
 }

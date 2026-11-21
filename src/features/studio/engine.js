@@ -2,7 +2,7 @@
 // così sappiamo esattamente dove cade la voce rispetto al beat.
 import { decodeBlob } from '../../lib/audio.js';
 import { concatChunks, encodeWav, peakOf } from '../../lib/wav.js';
-import { buildMaster, buildVoiceChain, levelGainFor } from './fx.js';
+import { activeRms, buildBeatCarve, buildMaster, buildVoiceChain, levelGainFor } from './fx.js';
 
 // Processore audio che raccoglie i campioni del microfono (gira nel thread audio).
 const WORKLET = `
@@ -145,31 +145,54 @@ export class StudioEngine {
     const t0 = ctx.currentTime + lead + clickDur; // momento in cui il beat (posizione `from`) suona
     const sources = [];
     for (let i = 0; i < (clickDur ? countIn : 0); i++) sources.push(this.click(ctx.currentTime + lead + (i * 60) / bpm, i === 0));
+    let beatNode = null;
+    let voiceNode = null;
     if (beat) {
       const s = ctx.createBufferSource();
       const g = ctx.createGain();
       g.gain.value = beatGain;
       s.buffer = beat;
-      s.connect(g).connect(voice ? master : ctx.destination);
+      if (voice) {
+        const carve = buildBeatCarve(ctx);
+        s.connect(carve.input);
+        carve.output.connect(g).connect(master);
+      } else s.connect(g).connect(ctx.destination);
       if (from < beat.duration) s.start(t0, from);
       sources.push(s);
+      beatNode = g;
     }
     if (voice?.buffer) {
       const s = ctx.createBufferSource();
       const g = ctx.createGain();
       g.gain.value = voiceGain;
       s.buffer = voice.buffer;
-      const chain = buildVoiceChain(ctx, fx, { bpm, level: this.levelOf(voice.buffer) });
+      const chain = buildVoiceChain(ctx, fx, { bpm, level: this.voiceLevel(voice.buffer, beat) });
       s.connect(chain.input);
       chain.output.connect(g).connect(master);
+      voiceNode = g;
       const pos = voice.offset - latency; // posizione della voce nel tempo del beat
       const startIn = pos - from;
       if (startIn >= 0) s.start(t0 + startIn);
       else if (-startIn < voice.buffer.duration) s.start(t0, -startIn);
       sources.push(s);
     }
-    this.playing = { sources, master, t0, from, length: Math.max(beat?.duration || 0, voice?.buffer ? voice.offset - latency + voice.buffer.duration : 0) };
+    this.playing = { sources, master, beatNode, voiceNode, t0, from, length: Math.max(beat?.duration || 0, voice?.buffer ? voice.offset - latency + voice.buffer.duration : 0) };
     return this.playing;
+  }
+
+  /** Secondi che mancano alla partenza del beat (durante il conteggio), altrimenti 0. */
+  countInLeft() {
+    if (!this.playing || !this.ctx) return 0;
+    return Math.max(0, this.playing.t0 - this.ctx.currentTime);
+  }
+
+  /** Volumi dal vivo mentre suona. */
+  setGains({ beatGain, voiceGain }) {
+    const p = this.playing;
+    if (!p || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    if (beatGain != null && p.beatNode) p.beatNode.gain.setTargetAtTime(beatGain, t, 0.03);
+    if (voiceGain != null && p.voiceNode) p.voiceNode.gain.setTargetAtTime(voiceGain, t, 0.03);
   }
 
   /** Posizione attuale nel tempo del beat (secondi; negativa durante il conteggio). */
@@ -250,11 +273,19 @@ export class StudioEngine {
     };
   }
 
-  /** Livello automatico della voce (calcolato una volta per take). */
-  levelOf(buffer) {
-    if (!this.levels) this.levels = new WeakMap();
-    if (!this.levels.has(buffer)) this.levels.set(buffer, levelGainFor(buffer));
-    return this.levels.get(buffer);
+  /** RMS memorizzato (calcolato una volta per audio). */
+  rmsOf(buffer) {
+    if (!this.rms) this.rms = new WeakMap();
+    if (!this.rms.has(buffer)) this.rms.set(buffer, activeRms(buffer));
+    return this.rms.get(buffer);
+  }
+
+  /** Livello della voce pensato sul beat: stesso volume medio del beat (poi lo regola "Voce sul beat"). */
+  voiceLevel(voiceBuf, beatBuf) {
+    const beatRms = beatBuf ? this.rmsOf(beatBuf) : 0;
+    const target = beatRms ? Math.max(0.05, Math.min(0.3, beatRms)) : 0.1;
+    const vr = this.rmsOf(voiceBuf);
+    return vr ? Math.max(0.5, Math.min(12, target / vr)) : levelGainFor(voiceBuf);
   }
 
   /** Mix beat + voce (con effetti) in un WAV stereo. */
@@ -269,13 +300,15 @@ export class StudioEngine {
     b.buffer = beat;
     const bg = off.createGain();
     bg.gain.value = beatGain;
-    b.connect(bg).connect(master);
+    const carve = buildBeatCarve(off);
+    b.connect(carve.input);
+    carve.output.connect(bg).connect(master);
     b.start(0);
     const v = off.createBufferSource();
     v.buffer = voice.buffer;
     const vg = off.createGain();
     vg.gain.value = voiceGain;
-    const chain = buildVoiceChain(off, fx, { bpm, level: this.levelOf(voice.buffer) });
+    const chain = buildVoiceChain(off, fx, { bpm, level: this.voiceLevel(voice.buffer, beat) });
     v.connect(chain.input);
     chain.output.connect(vg).connect(master);
     if (pos >= 0) v.start(pos);
