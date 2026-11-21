@@ -2,7 +2,7 @@ import { db, setMeta } from './db.js';
 
 // Tabelle incluse nel backup (anche quelle della fase 2, così il formato resta valido).
 const TABLES = ['ideas', 'audio', 'projects', 'tracks', 'beats', 'takes'];
-const FORMAT = 'quaderno-backup';
+const FORMAT = 'amit-backup';
 const VERSION = 1;
 
 const blobToDataUrl = (blob) =>
@@ -43,7 +43,7 @@ export async function createBackup() {
   }
   const json = JSON.stringify({ format: FORMAT, version: VERSION, exportedAt: new Date().toISOString(), data });
   const date = new Date().toISOString().slice(0, 10);
-  return { blob: new Blob([json], { type: 'application/json' }), filename: `quaderno-backup-${date}.json` };
+  return { blob: new Blob([json], { type: 'application/json' }), filename: `amit-backup-${date}.json` };
 }
 
 export async function markBackupDone() {
@@ -58,7 +58,7 @@ export async function importBackup(file, { replace = false } = {}) {
   } catch {
     throw new Error('Il file non è un backup valido.');
   }
-  if (parsed?.format !== FORMAT || !parsed.data) throw new Error('Questo file non è un backup di Quaderno.');
+  if (parsed?.format !== FORMAT || !parsed.data) throw new Error('Questo file non è un backup di Amit.');
   const tables = TABLES.map((t) => db.table(t));
   const counts = {};
   await db.transaction('rw', tables, async () => {

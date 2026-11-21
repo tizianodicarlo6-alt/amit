@@ -1,4 +1,4 @@
-# Quaderno
+# Amit
 
 Web app (PWA) in italiano per scrivere rap dal telefono.
 

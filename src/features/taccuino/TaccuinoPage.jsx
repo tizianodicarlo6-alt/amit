@@ -34,6 +34,7 @@ export default function TaccuinoPage() {
   return (
     <div className="page">
       <header className="page-head">
+        <img className="head-logo" src={`${import.meta.env.BASE_URL}logo-bianco.png`} alt="Amit" />
         <h1>Taccuino</h1>
       </header>
 

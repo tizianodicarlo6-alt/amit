@@ -51,7 +51,7 @@ export default function AltroPage() {
       if (share) {
         const file = new File([blob], filename, { type: 'application/json' });
         try {
-          await navigator.share({ files: [file], title: 'Backup Quaderno' });
+          await navigator.share({ files: [file], title: 'Backup Amit' });
         } catch (e) {
           if (e.name === 'AbortError') return;
           throw e;
@@ -155,7 +155,10 @@ export default function AltroPage() {
         ))}
       </div>
 
-      <p className="muted small center about">Quaderno · versione 0.1 · funziona anche offline</p>
+      <div className="about">
+        <img src={`${import.meta.env.BASE_URL}logo-bianco.png`} alt="Logo Amit" />
+        <p className="muted small center">Amit · versione 0.1 · funziona anche offline</p>
+      </div>
     </div>
   );
 }

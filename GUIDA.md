@@ -1,4 +1,4 @@
-# Guida a Quaderno 📓🎤
+# Guida ad Amit 🎤
 
 Spiegata passo per passo, senza dare nulla per scontato.
 
@@ -78,7 +78,7 @@ o cambi telefono, li perdi… **a meno che non hai un backup**.
 1. Vai in **Altro**.
 2. Tocca **Condividi backup** e scegli Google Drive, iCloud/File, o mandalo a te stesso su WhatsApp/email.
    Oppure **Scarica backup** per salvarlo nei download.
-3. Il file si chiama `quaderno-backup-DATA.json` e contiene **tutto**, note vocali comprese.
+3. Il file si chiama `amit-backup-DATA.json` e contiene **tutto**, note vocali comprese.
 
 **Recuperare i dati** (es. su un telefono nuovo):
 1. Installa l'app sul nuovo telefono.

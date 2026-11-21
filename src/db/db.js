@@ -1,7 +1,7 @@
 import Dexie from 'dexie';
 
 // Database locale (IndexedDB) sul telefono.
-export const db = new Dexie('quaderno');
+export const db = new Dexie('amit');
 
 db.version(1).stores({
   // Fase 1
