@@ -64,12 +64,12 @@ export function sketchToMidi(raw, { loops = 2 } = {}) {
         for (let h = 0; h < hits; h++) drums.push(...note(9, d.gm, base + step * STEP + swingTicks(step) + Math.round((h * STEP) / hits), Math.round(STEP / hits / 2), hits > 1 ? 80 : 105));
       }
     }
-    for (const n of s.notes.melody) if (n.start < loopSteps) melody.push(...note(0, n.pitch, base + n.start * STEP + swingTicks(n.start), n.len * STEP - 2, 100));
-    for (const n of s.notes.bass) if (n.start < loopSteps) bass.push(...note(2, n.pitch, base + n.start * STEP + swingTicks(n.start), n.len * STEP - 2, 110));
+    for (const n of s.notes.melody) if (n.start < loopSteps) melody.push(...note(0, n.pitch + (s.partPitch.melody || 0), base + n.start * STEP + swingTicks(n.start), n.len * STEP - 2, 100));
+    for (const n of s.notes.bass) if (n.start < loopSteps) bass.push(...note(2, n.pitch + (s.partPitch.bass || 0), base + n.start * STEP + swingTicks(n.start), n.len * STEP - 2, 110));
     for (let bar = 0; bar < s.bars; bar++) {
       const deg = s.chords[bar];
       if (deg == null) continue;
-      for (const m of chordNotes(s.key, deg, 48)) chords.push(...note(1, m, base + bar * 16 * STEP, 16 * STEP - 4, 80));
+      for (const m of chordNotes(s.key, deg, 48)) chords.push(...note(1, m + (s.partPitch.chords || 0), base + bar * 16 * STEP, 16 * STEP - 4, 80));
     }
   }
   const tracks = [track(meta, `${s.title || 'Bozza'} · ${s.bpm} BPM · ${s.key}`), track(drums, 'Batteria'), track(melody, 'Melodia'), track(chords, 'Accordi'), track(bass, '808')];

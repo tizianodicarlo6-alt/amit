@@ -40,7 +40,7 @@ function PianoRoll({ sketch, part, change, player, currentStep, noteLen }) {
     }
     const len = Math.min(noteLen, total - step);
     change({ notes: { ...sketch.notes, [part]: [...notes, { pitch, start: step, len, vel: 1 }] } });
-    player.preview({ inst, midi: pitch });
+    player.preview({ inst, midi: pitch + (sketch.partPitch?.[part] || 0) }, sketch);
   };
 
   return (
@@ -48,7 +48,7 @@ function PianoRoll({ sketch, part, change, player, currentStep, noteLen }) {
       <div className="roll-inner" style={{ width: 52 + total * CELL, height: rows.length * ROW }}>
         {rows.map((m, r) => (
           <div key={m} className={`roll-row${(m - root) % 12 === 0 ? ' tonic' : ''}`} style={{ top: r * ROW, height: ROW }}>
-            <span className="roll-key" onClick={() => player.preview({ inst, midi: m })}>
+            <span className="roll-key" onClick={() => player.preview({ inst, midi: m + (sketch.partPitch?.[part] || 0) }, sketch)}>
               {noteName(m)}
             </span>
           </div>
@@ -73,8 +73,9 @@ function PianoRoll({ sketch, part, change, player, currentStep, noteLen }) {
   );
 }
 
-export default function NotesEditor({ sketch, change, player, currentStep }) {
-  const [part, setPart] = useState('melody');
+export default function NotesEditor({ sketch, change, player, currentStep, fixedPart }) {
+  const [partPick, setPart] = useState('melody');
+  const part = fixedPart || partPick;
   const [noteLen, setNoteLen] = useState(2);
   const [bassStyle, setBassStyle] = useState('trap');
   const { minor } = scaleOf(sketch.key);
@@ -89,6 +90,7 @@ export default function NotesEditor({ sketch, change, player, currentStep }) {
 
   return (
     <div className="stack notes-ed">
+      {!fixedPart && (
       <div className="segmented parts">
         {[
           ['melody', 'Melodia'],
@@ -100,6 +102,7 @@ export default function NotesEditor({ sketch, change, player, currentStep }) {
           </button>
         ))}
       </div>
+      )}
 
       {part === 'melody' && (
         <div className="chips scroll-x">

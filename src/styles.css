@@ -497,3 +497,21 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .hum-prog { width: 100%; }
 .hum-notes { display: flex; flex-wrap: wrap; gap: 6px; }
 .hum-audio { width: 100%; height: 40px; }
+
+/* ---------- Bozza: pagina unica a schede ---------- */
+.sketch .sketch-body { display: flex; flex-direction: column; gap: 12px; }
+.sk-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.sk-card.muted-part { opacity: 0.55; }
+.sk-head { display: flex; align-items: center; gap: 10px; }
+.sk-head h2 { font-size: 18px; }
+.sk-n { width: 26px; height: 26px; border-radius: 50%; background: #fff; color: #000; display: grid; place-items: center; font-weight: 800; font-size: 13px; flex: none; }
+.right { text-align: right; }
+.pitch-ctl { display: flex; align-items: center; gap: 6px; }
+.pitch-ctl .btn.sm { min-height: 34px; padding: 0 10px; font-size: 13px; }
+.pitch-val { min-width: 56px; text-align: center; font-weight: 700; font-size: 13px; }
+.pitch-ctl .fx-label { width: 64px; flex: none; }
+.own-list { display: flex; flex-direction: column; gap: 6px; }
+.own-row { display: flex; align-items: center; gap: 8px; }
+.own-name { width: 80px; flex: none; font-size: 12px; font-weight: 700; }
+.own-row .btn.sm { min-height: 32px; }
+.dm-lab.own { color: #ffd23f; }

@@ -57,11 +57,14 @@ export function downsample(samples, sr, target = 11025) {
   return { x, sr: sr / r };
 }
 
-/** Altezza (MIDI con decimali, o null nel silenzio) ogni 10 ms. */
-export function pitchTrack(samples, sr) {
+/**
+ * Altezza (MIDI con decimali, o null nel silenzio) ogni 10 ms.
+ * Per suoni bassi (808) usare fmin più basso e finestra più lunga.
+ */
+export function pitchTrack(samples, sr, { fmin = 70, fmax = 1100, winSec = 0.045 } = {}) {
   const { x, sr: s2 } = downsample(samples, sr);
   const hop = Math.round(s2 * 0.01);
-  const win = Math.round(s2 * 0.045);
+  const win = Math.round(s2 * winSec);
   const rms = [];
   for (let i = 0; i + win < x.length; i += hop) {
     let s = 0;
@@ -75,7 +78,7 @@ export function pitchTrack(samples, sr) {
   for (let k = 0, i = 0; i + win < x.length; i += hop, k++) {
     let midi = null;
     if (rms[k] > thr) {
-      const { freq, clarity } = yin(x.subarray(i, i + win), s2);
+      const { freq, clarity } = yin(x.subarray(i, i + win), s2, { fmin, fmax });
       if (freq > 0 && clarity > 0.75) midi = 69 + 12 * Math.log2(freq / 440);
     }
     out.push({ t: (i + win / 2) / s2, midi });

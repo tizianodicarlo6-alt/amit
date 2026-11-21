@@ -1,6 +1,7 @@
 // Fa suonare la bozza in loop col lettore normale dell'iPhone (suona anche col silenzioso).
 import { encodeWav } from '../../lib/wav.js';
 import { renderSketchWav, renderPreview } from './synth.js';
+import { db } from '../../db/db.js';
 
 export class SketchPlayer {
   constructor() {
@@ -41,6 +42,32 @@ export class SketchPlayer {
     return !!this.el && !this.el.paused && this.el.src === this.url;
   }
 
+  /**
+   * Suoni caricati dall'utente, pronti da usare: { kick: { buffer }, …, bass: { buffer, root } }.
+   * (decodificati una volta e tenuti in memoria)
+   */
+  async loadSamples(sketch) {
+    if (!this.sampleCache) this.sampleCache = new Map();
+    const out = {};
+    for (const [part, info] of Object.entries(sketch.samples || {})) {
+      if (!info?.audioId) continue;
+      if (!this.sampleCache.has(info.audioId)) {
+        const rec = await db.audio.get(info.audioId);
+        if (!rec?.blob) continue;
+        const Off = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        const ctx = new Off(1, 1, 44100);
+        const data = await rec.blob.arrayBuffer();
+        const decoded = await new Promise((ok, ko) => {
+          const pr = ctx.decodeAudioData(data, ok, ko);
+          if (pr && pr.then) pr.then(ok, ko);
+        });
+        this.sampleCache.set(info.audioId, decoded);
+      }
+      out[part] = { buffer: this.sampleCache.get(info.audioId), root: info.root };
+    }
+    return out;
+  }
+
   /** Posizione nel loop (secondi). */
   position() {
     if (!this.el || !this.loopDur) return 0;
@@ -51,7 +78,8 @@ export class SketchPlayer {
   async play(sketch, { keepPosition = false } = {}) {
     const v = ++this.version;
     const at = keepPosition && this.playing ? this.position() : 0;
-    const { blob, loopDur } = await renderSketchWav(sketch);
+    const samples = await this.loadSamples(sketch);
+    const { blob, loopDur } = await renderSketchWav(sketch, { samples });
     if (v !== this.version) return false; // nel frattempo è arrivata una modifica più nuova
     const old = this.url;
     this.url = URL.createObjectURL(blob);
@@ -84,10 +112,12 @@ export class SketchPlayer {
   }
 
   /** Suona un colpo o una nota singola (quando tocchi la griglia). */
-  async preview(what) {
+  async preview(what, sketch) {
     if (!this.fx) return;
     try {
-      const blob = await renderPreview(what);
+      const samples = sketch ? await this.loadSamples(sketch) : {};
+      const part = what.drum || (what.inst === 'bass808' ? 'bass' : null);
+      const blob = await renderPreview({ ...what, sample: part ? samples[part] : null });
       if (this.fxUrl) URL.revokeObjectURL(this.fxUrl);
       this.fxUrl = URL.createObjectURL(blob);
       this.fx.src = this.fxUrl;

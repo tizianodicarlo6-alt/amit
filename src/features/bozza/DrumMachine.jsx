@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { addUserSample } from './samples.js';
 import { DRUMS, STYLES, STYLE_ORDER, drumsFromStyle } from './music.js';
 
 // Drum machine a passi (come il Channel Rack di FL Studio): tocchi i quadratini.
@@ -13,7 +14,7 @@ export default function DrumMachine({ sketch, change, player, currentStep }) {
     const v = row[i] || 0;
     row[i] = roll && rollMode ? (v + 1) % 5 : v ? 0 : 1; // rulli: 1 → 2 → 3 → 4 → spento
     change({ drums: { ...sketch.drums, [id]: row } });
-    if (row[i]) player.preview({ drum: id });
+    if (row[i]) player.preview({ drum: id }, sketch);
   };
 
   const applyStyle = (id) => {
@@ -66,7 +67,7 @@ export default function DrumMachine({ sketch, change, player, currentStep }) {
       <div className="dm-grid">
         {DRUMS.map((d) => (
           <div key={d.id} className="dm-row">
-            <button className="dm-lab" onClick={() => player.preview({ drum: d.id })}>
+            <button className={`dm-lab${sketch.samples?.[d.id] ? ' own' : ''}`} onClick={() => player.preview({ drum: d.id }, sketch)}>
               {d.label}
             </button>
             <div className="dm-steps">
@@ -99,6 +100,55 @@ export default function DrumMachine({ sketch, change, player, currentStep }) {
       <button className="btn ghost sm" onClick={clear}>
         Svuota la batteria
       </button>
+
+      <div className="field">
+        <span className="field-label">I tuoi suoni</span>
+        <p className="muted small">Carica i one-shot del tuo drum kit (wav, mp3…): l'app li usa al posto dei suoi.</p>
+        <div className="own-list">
+          {DRUMS.map((d) => (
+            <OwnSound key={d.id} part={d.id} label={d.label} sketch={sketch} change={change} player={player} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Riga "il tuo suono": carica / ascolta / torna al suono dell'app. */
+export function OwnSound({ part, label, sketch, change, player, preview }) {
+  const ref = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const own = sketch.samples?.[part];
+  const onFile = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    setBusy(true);
+    try {
+      const info = await addUserSample(f, part);
+      change({ samples: { ...sketch.samples, [part]: info } });
+    } catch {
+      alert('Non riesco a leggere questo file audio.');
+    }
+    setBusy(false);
+  };
+  return (
+    <div className="own-row">
+      <span className="own-name">{label}</span>
+      <span className="muted small ellipsis grow">{own ? own.name : "suono dell'app"}</span>
+      <button className="icon-btn sm" onClick={() => player.preview(preview || { drum: part }, sketch)} aria-label={`Ascolta ${label}`}>
+        ▶
+      </button>
+      {own ? (
+        <button className="btn sm ghost" onClick={() => change({ samples: Object.fromEntries(Object.entries(sketch.samples).filter(([k]) => k !== part)) })}>
+          Togli
+        </button>
+      ) : (
+        <button className="btn sm" onClick={() => ref.current.click()} disabled={busy}>
+          {busy ? '…' : 'Carica'}
+        </button>
+      )}
+      <input ref={ref} type="file" accept="audio/*,.wav,.mp3,.m4a,.aif,.aiff,.flac,.ogg" hidden onChange={onFile} />
     </div>
   );
 }

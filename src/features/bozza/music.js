@@ -43,6 +43,9 @@ export function newSketchData({ bpm = 140, key = 'Am', bars = 4 } = {}) {
     notes: { melody: [], bass: [] }, // { pitch (MIDI), start (in sedicesimi), len (sedicesimi), vel }
     chords: [], // per battuta: grado della scala (0–6) oppure null
     instruments: { melody: 'piano', chords: 'pad', bass: 'bass808' },
+    partPitch: { melody: 0, chords: 0, bass: 0 }, // pitch di ogni parte in semitoni (−24…+24)
+    samples: {}, // suoni caricati dall'utente: { kick: audioId, …, bass: audioId }
+    style: null,
     mix: Object.fromEntries(PARTS.map((p) => [p.id, { vol: p.id === 'drums' ? 0.9 : 0.75, mute: false }])),
   };
 }
@@ -59,6 +62,8 @@ export function normalizeSketch(s) {
   out.notes = { ...base.notes, ...(s.notes || {}) };
   out.instruments = { ...base.instruments, ...(s.instruments || {}) };
   out.mix = { ...base.mix, ...(s.mix || {}) };
+  out.partPitch = { ...base.partPitch, ...(s.partPitch || {}) };
+  out.samples = { ...(s.samples || {}) };
   return out;
 }
 
@@ -297,4 +302,13 @@ export function beatFromMelody(sketch, styleId) {
     notes: { ...sketch.notes, bass: bassFromChords(withChords, styleId) },
     instruments: { ...sketch.instruments, chords: styleId === 'lofi' || styleId === 'rnb' ? 'piano' : 'pad' },
   };
+}
+
+/** "Trasponi tutto": sposta tonalità e note di `st` semitoni (il beat resta uguale, più alto o più basso). */
+export function transposeSketch(sketch, st) {
+  const { root, minor } = scaleOf(sketch.key);
+  const newRoot = (((root + st) % 12) + 12) % 12;
+  const key = `${PITCH[newRoot]}${minor ? 'm' : ''}`;
+  const shift = (list) => (list || []).map((n) => ({ ...n, pitch: n.pitch + st }));
+  return { key, notes: { ...sketch.notes, melody: shift(sketch.notes.melody), bass: shift(sketch.notes.bass) } };
 }

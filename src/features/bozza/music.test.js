@@ -57,3 +57,14 @@ test('accordi scelti dalla melodia', async () => {
   assert.ok(b.notes.bass.length >= 4);
   assert.equal(b.drums.snare[4], 1);
 });
+
+test('trasponi tutto e pitch delle parti', async () => {
+  const { transposeSketch, normalizeSketch, noteName } = await import('./music.js');
+  const sk = normalizeSketch({ key: 'Am', notes: { melody: [{ pitch: 69, start: 0, len: 2 }], bass: [{ pitch: 33, start: 0, len: 16 }] } });
+  const up = transposeSketch(sk, 2);
+  assert.equal(up.key, 'Bm');
+  assert.equal(noteName(up.notes.melody[0].pitch), 'B4');
+  assert.equal(transposeSketch(sk, -2).key, 'Gm');
+  assert.equal(transposeSketch(normalizeSketch({ key: 'C' }), -1).key, 'B');
+  assert.deepEqual(sk.partPitch, { melody: 0, chords: 0, bass: 0 });
+});
