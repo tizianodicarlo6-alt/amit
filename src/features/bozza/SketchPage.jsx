@@ -10,25 +10,19 @@ import Icon from '../../components/Icon.jsx';
 import Sheet from '../../components/Sheet.jsx';
 import { useTapTempo } from '../../components/useTapTempo.js';
 import ExportRow, { slug } from '../studio/ExportRow.jsx';
-import {
-  INSTRUMENTS,
-  PROGRESSIONS,
-  STYLES,
-  STYLE_ORDER,
-  bassFromChords,
-  chordLabel,
-  chordsForMelody,
-  chordsFromProgression,
-  drumsFromStyle,
-  normalizeSketch,
-  scaleOf,
-  transposeSketch,
-} from './music.js';
+import { PARTS, normalizeSketch, transposeSketch } from './music.js';
 import { renderSketch, renderSketchWav } from './synth.js';
 import { SketchPlayer } from './player.js';
 import DrumMachine, { OwnSound } from './DrumMachine.jsx';
 import NotesEditor from './NotesEditor.jsx';
 import HumRecorder from './HumRecorder.jsx';
+
+const TABS = [
+  ['drums', '🥁 Batteria'],
+  ['hum', '🎤 Canticchia'],
+  ['notes', '🎹 Note'],
+  ['mix', '🎚 Mix'],
+];
 
 // Pitch di una parte: semitoni e ottave
 function PitchCtl({ value = 0, onChange }) {
@@ -56,29 +50,17 @@ function PitchCtl({ value = 0, onChange }) {
   );
 }
 
-// Volume + muto di una parte
-function VolCtl({ m, onChange }) {
-  return (
-    <div className="vol-row">
-      <button className={`mute${m.mute ? ' on' : ''}`} onClick={() => onChange({ mute: !m.mute })} aria-label="Muto">
-        M
-      </button>
-      <input className="slider" type="range" min={0} max={1} step={0.05} value={m.vol} onChange={(e) => onChange({ vol: Number(e.target.value) })} />
-      <span className="small mono vol-val">{Math.round(m.vol * 100)}%</span>
-    </div>
-  );
-}
-
-// La bozza di beat in una sola pagina: stile, melodia, accordi, 808, batteria.
+// La bozza di beat: batteria, note, accordi, mix. Suona in loop.
 export default function SketchPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const stored = useDbQuery(() => db.sketches.get(id).then((s) => s ?? null), [id], undefined);
   const [sketch, setSketch] = useState(null);
+  const [tab, setTab] = useState('drums');
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
   const [pos, setPos] = useState(0);
-  const [sheet, setSheet] = useState(null); // settings | export | hum | melody | bass | drums
+  const [sheet, setSheet] = useState(null); // 'settings' | 'export'
   const [beatState, setBeatState] = useState(null); // "Usa come beat"
   const playerRef = useRef(null);
   if (!playerRef.current) playerRef.current = new SketchPlayer();
@@ -147,7 +129,7 @@ export default function SketchPage() {
         /* l'utente può premere ▶ */
       }
       setLoading(false);
-    }, 80);
+    }, 60);
   };
 
   const onPlay = async () => {
@@ -175,22 +157,6 @@ export default function SketchPage() {
   const currentStep = playing ? Math.floor(pos / stepDur) : null;
   const bar = currentStep != null ? Math.floor(currentStep / 16) + 1 : 1;
   const beatN = currentStep != null ? Math.floor((currentStep % 16) / 4) + 1 : 1;
-  const { minor } = scaleOf(sketch.key);
-  const progs = minor ? PROGRESSIONS.minor : PROGRESSIONS.major;
-  const hasChords = sketch.chords.some((c) => c != null);
-  const melodyCount = sketch.notes.melody.length;
-  const drumHits = Object.values(sketch.drums).reduce((n, r) => n + r.slice(0, sketch.drumSteps).filter(Boolean).length, 0);
-  const setMix = (part, c) => change({ mix: { ...sketch.mix, [part]: { ...sketch.mix[part], ...c } } });
-  const setPitch = (part, v) => change({ partPitch: { ...sketch.partPitch, [part]: v } });
-
-  // ① stile: batteria, swing, BPM, ritmo dell'808 e suono degli accordi in un tocco
-  const applyStyle = (k) => {
-    const st = STYLES[k];
-    const changes = { style: k, drums: drumsFromStyle(k), drumSteps: 16, swing: st.swing || 0, bpm: st.bpm, instruments: { ...sketch.instruments, chords: k === 'lofi' || k === 'rnb' ? 'piano' : 'pad' } };
-    if (hasChords) changes.notes = { ...sketch.notes, bass: bassFromChords(sketch, k) };
-    change(changes);
-    if (!playing) playNow();
-  };
 
   const baseName = `${slug(sketch.title)} (${sketch.bpm} BPM ${sketch.key})`;
   const prepAudio = async () => {
@@ -233,139 +199,68 @@ export default function SketchPage() {
           <input className="sketch-title" value={sketch.title || ''} onChange={(e) => change({ title: e.target.value })} aria-label="Nome della bozza" />
         </div>
         <button className="btn sm" onClick={() => setSheet('settings')}>
-          {sketch.bpm} BPM · {sketch.key}
+          {sketch.bpm} BPM · {keyShort(sketch.key).split(' ')[0]} · {sketch.bars} batt.
         </button>
       </header>
 
-      <div className="sketch-body">
-        {/* ① STILE */}
-        <section className="sk-card">
-          <div className="sk-head">
-            <span className="sk-n">1</span>
-            <h2>Stile</h2>
-          </div>
-          <div className="chips">
-            {STYLE_ORDER.map((k) => (
-              <button key={k} className={`chip${sketch.style === k ? ' on' : ''}`} onClick={() => applyStyle(k)}>
-                {STYLES[k].label}
-              </button>
-            ))}
-          </div>
-          <p className="muted small">Un tocco e hai già la batteria e il tempo giusto. Poi aggiungi il resto.</p>
-        </section>
-
-        {/* ② MELODIA */}
-        <section className={`sk-card${sketch.mix.melody.mute ? ' muted-part' : ''}`}>
-          <div className="sk-head">
-            <span className="sk-n">2</span>
-            <h2>Melodia</h2>
-            <span className="muted small grow right">{melodyCount ? `${melodyCount} note` : 'vuota'}</span>
-          </div>
-          <div className="row">
-            <button className="btn primary grow" onClick={() => setSheet('hum')}>
-              🎤 Canta
-            </button>
-            <button className="btn grow" onClick={() => setSheet('melody')}>
-              ✏️ Scrivi
-            </button>
-          </div>
-          <div className="chips scroll-x">
-            {INSTRUMENTS.filter((i) => i.id !== 'bass808').map((i) => (
-              <button key={i.id} className={`chip${sketch.instruments.melody === i.id ? ' on' : ''}`} onClick={() => change({ instruments: { ...sketch.instruments, melody: i.id } })}>
-                {i.label}
-              </button>
-            ))}
-          </div>
-          <PitchCtl value={sketch.partPitch.melody} onChange={(v) => setPitch('melody', v)} />
-          <VolCtl m={sketch.mix.melody} onChange={(c) => setMix('melody', c)} />
-        </section>
-
-        {/* ③ ACCORDI */}
-        <section className={`sk-card${sketch.mix.chords.mute ? ' muted-part' : ''}`}>
-          <div className="sk-head">
-            <span className="sk-n">3</span>
-            <h2>Accordi</h2>
-            <span className="muted small grow right">{hasChords ? sketch.chords.map((d) => chordLabel(sketch.key, d)).join(' · ') : 'nessuno'}</span>
-          </div>
-          <div className="chips">
-            {melodyCount > 0 && (
-              <button className="chip" onClick={() => change({ chords: chordsForMelody(sketch.notes.melody, sketch.key, sketch.bars, sketch.style || 'trap') })}>
-                ✨ Dalla melodia
-              </button>
-            )}
-            {progs.map((pr) => (
-              <button key={pr.id} className="chip" onClick={() => change({ chords: chordsFromProgression(pr.degrees, sketch.bars) })}>
-                {pr.label}
-              </button>
-            ))}
-            {hasChords && (
-              <button className="chip" onClick={() => change({ chords: [] })}>
-                Nessuno
-              </button>
-            )}
-          </div>
-          <div className="chips scroll-x">
-            {INSTRUMENTS.filter((i) => ['pad', 'piano', 'pluck', 'bell'].includes(i.id)).map((i) => (
-              <button key={i.id} className={`chip${sketch.instruments.chords === i.id ? ' on' : ''}`} onClick={() => change({ instruments: { ...sketch.instruments, chords: i.id } })}>
-                {i.label}
-              </button>
-            ))}
-          </div>
-          <PitchCtl value={sketch.partPitch.chords} onChange={(v) => setPitch('chords', v)} />
-          <VolCtl m={sketch.mix.chords} onChange={(c) => setMix('chords', c)} />
-        </section>
-
-        {/* ④ 808 */}
-        <section className={`sk-card${sketch.mix.bass.mute ? ' muted-part' : ''}`}>
-          <div className="sk-head">
-            <span className="sk-n">4</span>
-            <h2>808</h2>
-            <span className="muted small grow right">{sketch.notes.bass.length ? `${sketch.notes.bass.length} note` : 'vuoto'}</span>
-          </div>
-          <div className="row">
-            <button className="btn primary grow" onClick={() => change({ notes: { ...sketch.notes, bass: bassFromChords(sketch, sketch.style || 'trap') } })} disabled={!hasChords}>
-              Dagli accordi
-            </button>
-            <button className="btn grow" onClick={() => setSheet('bass')}>
-              ✏️ Scrivi
-            </button>
-          </div>
-          {!hasChords && <p className="muted small">Scegli prima gli accordi: l'808 li segue.</p>}
-          <OwnSound part="bass" label="Il tuo 808" sketch={sketch} change={change} player={player} preview={{ inst: 'bass808', midi: 33 + (sketch.partPitch.bass || 0) }} />
-          <PitchCtl value={sketch.partPitch.bass} onChange={(v) => setPitch('bass', v)} />
-          <VolCtl m={sketch.mix.bass} onChange={(c) => setMix('bass', c)} />
-        </section>
-
-        {/* ⑤ BATTERIA */}
-        <section className={`sk-card${sketch.mix.drums.mute ? ' muted-part' : ''}`}>
-          <div className="sk-head">
-            <span className="sk-n">5</span>
-            <h2>Batteria</h2>
-            <span className="muted small grow right">{drumHits ? `${drumHits} colpi · swing ${sketch.swing}%` : 'vuota'}</span>
-          </div>
-          <button className="btn" onClick={() => setSheet('drums')}>
-            ✏️ Modifica la batteria e i tuoi suoni
+      <div className="tabs studio-tabs">
+        {TABS.map(([k, l]) => (
+          <button key={k} className={`tab${tab === k ? ' on' : ''}`} onClick={() => setTab(k)}>
+            {l}
           </button>
-          <VolCtl m={sketch.mix.drums} onChange={(c) => setMix('drums', c)} />
-        </section>
+        ))}
+      </div>
 
-        {/* TUTTO IL BEAT */}
-        <section className="sk-card">
-          <div className="sk-head">
-            <h2>Tutto il beat</h2>
+      <div className="sketch-body">
+        {tab === 'drums' && <DrumMachine sketch={sketch} change={change} player={player} currentStep={currentStep} />}
+        {tab === 'mix' && (
+          <div className="stack">
+            {PARTS.map((p) => {
+              const m = sketch.mix[p.id];
+              const setM = (c) => change({ mix: { ...sketch.mix, [p.id]: { ...m, ...c } } });
+              return (
+                <div key={p.id} className="mix-row">
+                  <span className="mix-name">{p.label}</span>
+                  <button className={`mute${m.mute ? ' on' : ''}`} onClick={() => setM({ mute: !m.mute })}>
+                    M
+                  </button>
+                  <input className="slider" type="range" min={0} max={1} step={0.05} value={m.vol} onChange={(e) => setM({ vol: Number(e.target.value) })} />
+                  <span className="small mono vol-val">{Math.round(m.vol * 100)}%</span>
+                  {p.id !== 'drums' && (
+                    <div className="mix-extra">
+                      <PitchCtl value={sketch.partPitch?.[p.id] || 0} onChange={(v) => change({ partPitch: { ...sketch.partPitch, [p.id]: v } })} />
+                      {p.id === 'bass' && <OwnSound part="bass" label="Il tuo 808" sketch={sketch} change={change} player={player} preview={{ inst: 'bass808', midi: 33 + (sketch.partPitch?.bass || 0) }} />}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            <div className="pitch-ctl">
+              <span className="fx-label">Trasponi tutto</span>
+              <button className="btn sm" onClick={() => change(transposeSketch(sketch, -1))} aria-label="Tutto un semitono giù">
+                −
+              </button>
+              <span className="mono pitch-val">{keyShort(sketch.key)}</span>
+              <button className="btn sm" onClick={() => change(transposeSketch(sketch, 1))} aria-label="Tutto un semitono su">
+                +
+              </button>
+            </div>
+            <p className="muted small">Pitch: alza o abbassa una parte (− + di un semitono, 8va di un'ottava). Trasponi sposta tutto il beat insieme.</p>
           </div>
-          <div className="pitch-ctl">
-            <span className="fx-label">Trasponi</span>
-            <button className="btn sm" onClick={() => change(transposeSketch(sketch, -1))} aria-label="Tutto un semitono giù">
-              −
-            </button>
-            <span className="mono pitch-val">{keyShort(sketch.key)}</span>
-            <button className="btn sm" onClick={() => change(transposeSketch(sketch, 1))} aria-label="Tutto un semitono su">
-              +
-            </button>
-          </div>
-          <p className="muted small">Sposta tutto più in alto o più in basso (cambia la tonalità): utile per la tua voce.</p>
-        </section>
+        )}
+        {tab === 'notes' && <NotesEditor sketch={sketch} change={change} player={player} currentStep={currentStep} />}
+        {tab === 'hum' && (
+          <HumRecorder
+            sketch={sketch}
+            change={change}
+            player={player}
+            onDone={() => {
+              // beat creato: lo faccio sentire subito
+              setTab('notes');
+              playNow();
+            }}
+          />
+        )}
       </div>
 
       <div className="transport sketch-transport">
@@ -379,35 +274,6 @@ export default function SketchPage() {
           Manda al produttore
         </button>
       </div>
-
-      {sheet === 'hum' && (
-        <Sheet open onClose={() => setSheet(null)} title="Canta la melodia">
-          <HumRecorder
-            sketch={sketch}
-            change={change}
-            player={player}
-            onDone={() => {
-              setSheet(null);
-              playNow();
-            }}
-          />
-        </Sheet>
-      )}
-      {sheet === 'melody' && (
-        <Sheet open onClose={() => setSheet(null)} title="Melodia">
-          <NotesEditor sketch={sketch} change={change} player={player} currentStep={currentStep} fixedPart="melody" />
-        </Sheet>
-      )}
-      {sheet === 'bass' && (
-        <Sheet open onClose={() => setSheet(null)} title="808">
-          <NotesEditor sketch={sketch} change={change} player={player} currentStep={currentStep} fixedPart="bass" />
-        </Sheet>
-      )}
-      {sheet === 'drums' && (
-        <Sheet open onClose={() => setSheet(null)} title="Batteria">
-          <DrumMachine sketch={sketch} change={change} player={player} currentStep={currentStep} />
-        </Sheet>
-      )}
 
       {sheet === 'settings' && (
         <Sheet open onClose={() => setSheet(null)} title="Impostazioni bozza">

@@ -466,7 +466,8 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .dm-cell.beat { background: #24242b; border-color: #3a3a44; }
 .dm-cell.on { background: #fff; border-color: #fff; }
 .dm-cell.now { box-shadow: 0 0 0 2px #ff3b3b; }
-.mix-row { display: flex; align-items: center; gap: 10px; }
+.mix-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mix-extra { flex-basis: 100%; display: flex; flex-direction: column; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line, #222); }
 .mix-name { width: 92px; font-weight: 700; flex: none; }
 .mix-row .slider { flex: 1; }
 .mute { width: 34px; height: 30px; border-radius: 6px; border: 1px solid #3a3a42; background: #1a1a1f; color: #9a9aa2; font-weight: 900; font-size: 12px; }
