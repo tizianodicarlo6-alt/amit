@@ -53,6 +53,14 @@ export function nextBlockAfter(t, timeline) {
 }
 
 /** Aggancia un tempo al battito più vicino della griglia (ancora = attacco). */
+/** L'ultimo battito del beat (griglia che parte da `anchor`) che cade a `t` o prima. */
+export function onBeatBefore(t, anchor, beatDur) {
+  if (!beatDur) return t;
+  let b = anchor + Math.floor((t - anchor) / beatDur + 1e-6) * beatDur;
+  while (b < 0) b += beatDur;
+  return b;
+}
+
 export function snapToBeat(t, anchor, beatDur) {
   if (!beatDur) return t;
   return Math.max(0, anchor + Math.round((t - anchor) / beatDur) * beatDur);

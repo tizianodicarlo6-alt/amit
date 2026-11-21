@@ -19,7 +19,7 @@ import BeatTimeline from './BeatTimeline.jsx';
 import { dbToGain, normalizeStrip } from './fx.js';
 import EffectsSheet from './EffectsSheet.jsx';
 import MixSheet from './MixSheet.jsx';
-import { buildTimeline, lineAt, nextBlockAfter, snapToBeat } from './timeline.js';
+import { buildTimeline, lineAt, nextBlockAfter, onBeatBefore, snapToBeat } from './timeline.js';
 
 export default function StudioPage() {
   const { id } = useParams();
@@ -250,7 +250,9 @@ export default function StudioPage() {
       silentSince.current = 0;
       // Per doppie e adlib senti le voci già registrate
       const guide = recRole === 'main' ? [] : await loadVoices({ ignoreSolo: true });
-      recRef.current = await engine.record({ beat: beatBuf, from: startAt, beatGain: beatVol, countIn: countIn && bpm ? 4 : 0, bpm, monitor: monitor && headphones, fx, speaker: !headphones, guide });
+      // col metronomo parto su un battito del beat: così i click cadono a tempo
+      const from = countIn && bpm ? onBeatBefore(startAt, attack, beatDur) : startAt;
+      recRef.current = await engine.record({ beat: beatBuf, from, beatGain: beatVol, countIn: countIn && bpm ? 4 : 0, bpm, monitor: monitor && headphones, fx, speaker: !headphones, guide });
       setModeBoth('recording');
       rafRef.current = requestAnimationFrame(tick);
     } catch (e) {

@@ -450,7 +450,7 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 
 /* ---------- Bozza beat ---------- */
 .sketch-title { width: 100%; border: 0; background: transparent; color: var(--text); font-family: var(--display); text-transform: uppercase; font-size: 22px; font-weight: 600; letter-spacing: 0.02em; padding: 0; outline: none; }
-.sketch-body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0 10px; }
+.sketch-body { flex: 1; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: 4px 0 10px; }
 .sketch-transport { justify-content: space-between; }
 .sketch-pos { font-size: 20px; font-weight: 700; min-width: 70px; }
 .sketch-card { text-align: left; border: 0; background: transparent; color: inherit; }
@@ -476,7 +476,7 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .notes-ed .parts button { min-height: 38px; }
 .notes-tools { gap: 8px; }
 .notes-tools .chip { min-height: 32px; padding: 0 10px; font-size: 12px; }
-.roll { overflow: auto; max-height: 52vh; border: 1px solid var(--border); border-radius: 12px; background: #0a0a0c; -webkit-overflow-scrolling: touch; }
+.roll { overflow: auto; overscroll-behavior: contain; max-width: 100%; max-height: 52vh; border: 1px solid var(--border); border-radius: 12px; background: #0a0a0c; -webkit-overflow-scrolling: touch; }
 .roll-inner { position: relative; }
 .roll-row { position: absolute; left: 0; right: 0; border-bottom: 1px solid #1c1c22; }
 .roll-row.tonic { background: rgba(255, 255, 255, 0.04); }
@@ -516,3 +516,4 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .own-name { width: 80px; flex: none; font-size: 12px; font-weight: 700; }
 .own-row .btn.sm { min-height: 32px; }
 .dm-lab.own { color: #ffd23f; }
+.sketch .chips.scroll-x { margin: 0; padding: 0; }

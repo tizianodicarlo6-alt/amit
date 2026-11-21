@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTimeline, lineAt, nextBlockAfter, snapToBeat } from './timeline.js';
+import { buildTimeline, lineAt, nextBlockAfter, onBeatBefore, snapToBeat } from './timeline.js';
 
 const sections = [
   { id: 's1', type: 'strofa', text: 'a\nb\nc\nd' },
@@ -87,4 +87,11 @@ test('nomi delle take', async () => {
     { id: 'c', role: 'double', audioId: 'z', createdAt: 3 },
   ]);
   assert.deepEqual([L.get('a'), L.get('b'), L.get('b2'), L.get('c')], ['Voce 1', 'Voce 2', 'Voce 2B', 'Doppia 1']);
+});
+
+test('onBeatBefore: la partenza col metronomo cade su un battito', () => {
+  // beat a 120 BPM (0,5 s), primo battito a 0,3 s
+  assert.equal(onBeatBefore(7.0, 0.3, 0.5), 6.8);
+  assert.equal(onBeatBefore(6.8, 0.3, 0.5), 6.8);
+  assert.ok(Math.abs(onBeatBefore(0.1, 0.3, 0.5) - 0.3) < 1e-9); // prima dell'attacco: primo battito ≥ 0
 });
