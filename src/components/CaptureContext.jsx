@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useState } from 'react';
 import QuickCapture from '../features/taccuino/QuickCapture.jsx';
+import ErrorBoundary from './ErrorBoundary.jsx';
 
 // Permette di aprire "Nuova idea" da qualunque pagina.
 const Ctx = createContext({ openCapture: () => {} });
@@ -12,7 +13,11 @@ export function CaptureProvider({ children }) {
   return (
     <Ctx.Provider value={{ openCapture }}>
       {children}
-      {opts && <QuickCapture {...opts} onClose={close} />}
+      {opts && (
+        <ErrorBoundary onReset={close}>
+          <QuickCapture {...opts} onClose={close} />
+        </ErrorBoundary>
+      )}
     </Ctx.Provider>
   );
 }

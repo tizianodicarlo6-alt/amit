@@ -165,34 +165,73 @@ export function rhymeKey(word) {
   return key || null;
 }
 
-/** Divide una riga in pezzi: parole (con chiave di rima) e testo intermedio. */
+/**
+ * Chiave di assonanza: solo le vocali dalla tonica in poi
+ * (es. "notte" → "oe", "amore" → "oe", "strada" → "aa").
+ */
+export function assonanceKey(word) {
+  const k = rhymeKey(word);
+  if (!k) return null;
+  return k.replace(/[^aeiou]/g, '') || null;
+}
+
+/** Divide una riga in pezzi: parole (con chiavi di rima e assonanza) e testo intermedio. */
 export function tokenizeLine(line) {
   const parts = [];
   let last = 0;
   for (const m of line.matchAll(WORD_RE)) {
-    if (m.index > last) parts.push({ text: line.slice(last, m.index), key: null });
-    parts.push({ text: m[0], key: rhymeKey(m[0]) });
+    if (m.index > last) parts.push({ text: line.slice(last, m.index), key: null, akey: null });
+    parts.push({ text: m[0], key: rhymeKey(m[0]), akey: assonanceKey(m[0]) });
     last = m.index + m[0].length;
   }
-  if (last < line.length) parts.push({ text: line.slice(last), key: null });
+  if (last < line.length) parts.push({ text: line.slice(last), key: null, akey: null });
   return parts;
 }
 
-/**
- * Dato tutto il testo, assegna un colore (indice) a ogni chiave
- * che compare almeno 2 volte. Ritorna Map(chiave → indice colore).
- */
-export function rhymeColors(text, paletteSize = 12) {
+function countKeys(text, keyFn) {
   const counts = new Map();
-  const order = [];
   for (const m of text.matchAll(WORD_RE)) {
-    const k = rhymeKey(m[0]);
-    if (!k) continue;
-    if (!counts.has(k)) order.push(k);
-    counts.set(k, (counts.get(k) || 0) + 1);
+    const k = keyFn(m[0]);
+    if (k) counts.set(k, (counts.get(k) || 0) + 1);
   }
+  return counts; // Map mantiene l'ordine di prima apparizione
+}
+
+function colorMap(counts, paletteSize) {
   const map = new Map();
   let i = 0;
-  for (const k of order) if (counts.get(k) >= 2) map.set(k, i++ % paletteSize);
+  for (const [k, n] of counts) if (n >= 2) map.set(k, i++ % paletteSize);
   return map;
+}
+
+/** Rime perfette: Map(chiave → indice colore) per le chiavi che compaiono almeno 2 volte. */
+export function rhymeColors(text, paletteSize = 12) {
+  return colorMap(countKeys(text, rhymeKey), paletteSize);
+}
+
+/**
+ * Analisi completa per l'editor.
+ * mode "rime": colora le rime perfette.
+ * mode "assonanze": colora per vocali; le rime perfette restano "piene", le sole assonanze sottolineate.
+ * Ritorna { colors, exact, groupKey(part), stats: { rime, assonanze } }.
+ */
+export function analyzeRhymes(text, mode = 'rime', paletteSize = 12) {
+  const exactCounts = countKeys(text, rhymeKey);
+  const exact = new Set([...exactCounts].filter(([, n]) => n >= 2).map(([k]) => k));
+  const assCounts = countKeys(text, assonanceKey);
+  const colors = mode === 'assonanze' ? colorMap(assCounts, paletteSize) : colorMap(exactCounts, paletteSize);
+  const groupKey = (p) => (mode === 'assonanze' ? p.akey : p.key);
+  // Gruppi di assonanza che contengono almeno 2 parole che NON rimano perfettamente tra loro.
+  const assGroups = new Map();
+  for (const m of text.matchAll(WORD_RE)) {
+    const a = assonanceKey(m[0]);
+    if (!a || assCounts.get(a) < 2) continue;
+    if (!assGroups.has(a)) assGroups.set(a, new Set());
+    assGroups.get(a).add(rhymeKey(m[0]));
+  }
+  const stats = {
+    rime: exact.size,
+    assonanze: [...assGroups.values()].filter((set) => set.size >= 2).length,
+  };
+  return { colors, exact, groupKey, stats };
 }

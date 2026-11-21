@@ -71,6 +71,7 @@ export default function QuickCapture({ onClose, trackId: initialTrack = null, mo
               <p className="muted">Sto registrando… tocca per fermare</p>
             </>
           )}
+          {rec.state === 'starting' && <p className="muted">Attendo il microfono… (se compare la richiesta, tocca Consenti)</p>}
           {rec.state === 'idle' && (
             <>
               <button className="rec-btn" onClick={rec.start} aria-label="Registra">

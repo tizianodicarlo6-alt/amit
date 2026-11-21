@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { countWordSyllables, countLineSyllables, rhymeKey, rhymeColors } from './italiano.js';
+import { countWordSyllables, countLineSyllables, rhymeKey, rhymeColors, assonanceKey, analyzeRhymes } from './italiano.js';
 
 test('sillabe parole', () => {
   const casi = { casa: 2, paese: 3, poeta: 3, aiuto: 3, mai: 1, tuoi: 1, ritrovai: 3, giorno: 2, chiesa: 2, ciao: 2, strada: 2, rap: 1, io: 1, scuola: 2, amore: 3 };
@@ -35,4 +35,19 @@ test('colori solo per rime ripetute', () => {
   const m = rhymeColors('Corro nella notte\nle strade sono rotte\nil sole');
   assert.ok(m.has(rhymeKey('notte')));
   assert.ok(!m.has(rhymeKey('sole')));
+});
+
+test('assonanze', () => {
+  const ass = (a, b) => assert.equal(assonanceKey(a), assonanceKey(b), `${a} / ${b}`);
+  ass('notte', 'molle');
+  ass('amore', 'sole');
+  ass('strada', 'casa');
+  ass('città', 'là');
+  assert.notEqual(assonanceKey('casa'), assonanceKey('cose'));
+  const a = analyzeRhymes('la notte\nle rotte\nil sole', 'assonanze');
+  assert.equal(a.stats.rime, 1); // notte / rotte
+  assert.equal(a.stats.assonanze, 1); // gruppo "oe": otte + ole
+  assert.ok(a.colors.has('oe'));
+  assert.ok(a.exact.has(rhymeKey('notte')));
+  assert.ok(!a.exact.has(rhymeKey('sole')));
 });

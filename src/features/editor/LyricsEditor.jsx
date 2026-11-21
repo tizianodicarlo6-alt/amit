@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from 'react';
 import { newSection, updateTrack } from '../../db/db.js';
 import { SECTION_TYPES, RHYME_COLORS, sectionLabel } from '../../constants.js';
-import { countLineSyllables, rhymeColors, tokenizeLine } from '../../lib/italiano.js';
+import { analyzeRhymes, countLineSyllables, tokenizeLine } from '../../lib/italiano.js';
 import { useAutosave, SaveStatus } from '../../components/useAutosave.jsx';
 import Icon from '../../components/Icon.jsx';
 
@@ -15,11 +15,36 @@ const readPref = (k, d) => {
 };
 const writePref = (k, v) => {
   try {
-    localStorage.setItem(k, v ? '1' : '0');
+    localStorage.setItem(k, typeof v === 'string' ? v : v ? '1' : '0');
   } catch {
     /* ignorato */
   }
 };
+const readMode = () => {
+  try {
+    return localStorage.getItem('q.rimeMode') || 'rime';
+  } catch {
+    return 'rime';
+  }
+};
+
+const MODES = [
+  ['off', 'No'],
+  ['rime', 'Rime'],
+  ['assonanze', 'Assonanze'],
+];
+
+function ModePicker({ value, onChange }) {
+  return (
+    <div className="segmented" role="radiogroup" aria-label="Evidenzia">
+      {MODES.map(([id, label]) => (
+        <button key={id} role="radio" aria-checked={value === id} className={value === id ? 'on' : ''} onClick={() => onChange(id)}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function Toggle({ on, onChange, label }) {
   return (
@@ -31,18 +56,20 @@ function Toggle({ on, onChange, label }) {
 }
 
 // Una riga "disegnata" sotto al campo di testo: parole colorate + sillabe.
-const Line = memo(function Line({ line, colors, showRhymes, showSyllables }) {
+const Line = memo(function Line({ line, analysis, showRhymes, showSyllables }) {
   const syl = showSyllables && line.trim() ? countLineSyllables(line) : null;
   let content;
   if (!line) content = '​';
   else if (!showRhymes) content = line;
   else
     content = tokenizeLine(line).map((p, i) => {
-      const c = p.key != null ? colors.get(p.key) : undefined;
-      return c === undefined ? (
-        p.text
-      ) : (
-        <span key={i} className="rhyme" style={{ '--rc': RHYME_COLORS[c] }}>
+      const g = analysis.groupKey(p);
+      const c = g != null ? analysis.colors.get(g) : undefined;
+      if (c === undefined) return p.text;
+      // Rima perfetta = colore pieno; solo assonanza = sottolineatura tratteggiata.
+      const perfect = analysis.exact.has(p.key);
+      return (
+        <span key={i} className={perfect ? 'rhyme' : 'rhyme ass'} style={{ '--rc': RHYME_COLORS[c] }}>
           {p.text}
         </span>
       );
@@ -56,13 +83,13 @@ const Line = memo(function Line({ line, colors, showRhymes, showSyllables }) {
 });
 
 // Campo di testo trasparente sopra al "disegno": si scrive normalmente, si vedono i colori.
-function SectionText({ text, onChange, colors, showRhymes, showSyllables }) {
+function SectionText({ text, onChange, analysis, showRhymes, showSyllables }) {
   const lines = text.split('\n');
   return (
     <div className={`lyr${showSyllables ? ' with-syl' : ''}`}>
       <div className="lyr-back" aria-hidden="true">
         {lines.map((l, i) => (
-          <Line key={i} line={l} colors={colors} showRhymes={showRhymes} showSyllables={showSyllables} />
+          <Line key={i} line={l} analysis={analysis} showRhymes={showRhymes} showSyllables={showSyllables} />
         ))}
       </div>
       <textarea
@@ -80,12 +107,13 @@ function SectionText({ text, onChange, colors, showRhymes, showSyllables }) {
 
 export default function LyricsEditor({ track }) {
   const [sections, setSections] = useState(() => (track.sections?.length ? track.sections : [newSection('strofa')]));
-  const [showRhymes, setShowRhymes] = useState(() => readPref('q.rime', true));
+  const [mode, setMode] = useState(readMode);
+  const showRhymes = mode !== 'off';
   const [showSyllables, setShowSyllables] = useState(() => readPref('q.sillabe', true));
   const status = useAutosave(sections, (v) => updateTrack(track.id, { sections: v }));
 
   const allText = useMemo(() => sections.map((s) => s.text).join('\n'), [sections]);
-  const colors = useMemo(() => (showRhymes ? rhymeColors(allText, RHYME_COLORS.length) : new Map()), [allText, showRhymes]);
+  const analysis = useMemo(() => analyzeRhymes(allText, mode, RHYME_COLORS.length), [allText, mode]);
 
   const update = (id, changes) => setSections((list) => list.map((s) => (s.id === id ? { ...s, ...changes } : s)));
   const add = (type) => setSections((list) => [...list, newSection(type)]);
@@ -120,11 +148,23 @@ export default function LyricsEditor({ track }) {
   return (
     <div className="editor">
       <div className="editor-bar">
-        <Toggle on={showRhymes} onChange={(v) => (setShowRhymes(v), writePref('q.rime', v))} label="Rime" />
+        <ModePicker value={mode} onChange={(v) => (setMode(v), writePref('q.rimeMode', v))} />
         <Toggle on={showSyllables} onChange={(v) => (setShowSyllables(v), writePref('q.sillabe', v))} label="Sillabe" />
         <span className="grow" />
         <SaveStatus status={status} />
       </div>
+      {showRhymes && (
+        <div className="rhyme-legend muted small">
+          <span>
+            <span className="rhyme" style={{ '--rc': RHYME_COLORS[0] }}>rima</span> {analysis.stats.rime} gruppi
+          </span>
+          {mode === 'assonanze' && (
+            <span>
+              <span className="rhyme ass" style={{ '--rc': RHYME_COLORS[1] }}>assonanza</span> {analysis.stats.assonanze} gruppi
+            </span>
+          )}
+        </div>
+      )}
 
       {sections.map((s, i) => {
         seen[s.type] = (seen[s.type] || 0) + 1;
@@ -152,7 +192,7 @@ export default function LyricsEditor({ track }) {
                 <Icon name="trash" size={18} />
               </button>
             </div>
-            <SectionText text={s.text} onChange={(text) => update(s.id, { text })} colors={colors} showRhymes={showRhymes} showSyllables={showSyllables} />
+            <SectionText text={s.text} onChange={(text) => update(s.id, { text })} analysis={analysis} showRhymes={showRhymes} showSyllables={showSyllables} />
           </section>
         );
       })}
