@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../../db/useDbQuery.js';
 import { db, getMeta } from '../../db/db.js';
 import { createBackup, importBackup, markBackupDone } from '../../db/backup.js';
 import { formatDate } from '../../constants.js';
@@ -23,12 +23,12 @@ function download(blob, filename) {
 }
 
 export default function AltroPage() {
-  const counts = useLiveQuery(async () => ({
+  const counts = useDbQuery(async () => ({
     ideas: await db.ideas.count(),
     tracks: await db.tracks.count(),
     projects: await db.projects.count(),
   }), []);
-  const lastBackup = useLiveQuery(() => getMeta('lastBackupAt'), []);
+  const lastBackup = useDbQuery(() => getMeta('lastBackupAt'), []);
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState('');
   const [persisted, setPersisted] = useState(null);

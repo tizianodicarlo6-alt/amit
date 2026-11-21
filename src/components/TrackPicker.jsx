@@ -1,9 +1,9 @@
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../db/useDbQuery.js';
 import { db } from '../db/db.js';
 
 // Menu a tendina per collegare qualcosa a una traccia.
 export default function TrackPicker({ value, onChange, label = 'Collega a una traccia' }) {
-  const tracks = useLiveQuery(() => db.tracks.orderBy('updatedAt').reverse().toArray(), []) || [];
+  const tracks = useDbQuery(() => db.tracks.orderBy('updatedAt').reverse().toArray(), []) || [];
   return (
     <label className="field">
       <span className="field-label">{label}</span>

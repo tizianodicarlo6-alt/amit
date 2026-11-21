@@ -1,14 +1,14 @@
 import { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../db/useDbQuery.js';
 import { db } from '../db/db.js';
 import { DEFAULT_TAGS } from '../constants.js';
 
 export function useAllTags() {
   return (
-    useLiveQuery(async () => {
-      const used = await db.ideas.orderBy('tags').uniqueKeys();
-      return [...new Set([...DEFAULT_TAGS, ...used])];
-    }, []) || DEFAULT_TAGS
+    useDbQuery(async () => {
+      const ideas = await db.ideas.toArray();
+      return [...new Set([...DEFAULT_TAGS, ...ideas.flatMap((i) => i.tags || [])])];
+    }, [], DEFAULT_TAGS) || DEFAULT_TAGS
   );
 }
 

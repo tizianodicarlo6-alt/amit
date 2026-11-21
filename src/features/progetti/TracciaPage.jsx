@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../../db/useDbQuery.js';
 import { db, deleteTrack, updateIdea, updateTrack } from '../../db/db.js';
 import { STATUSES } from '../../constants.js';
 import Icon from '../../components/Icon.jsx';
@@ -97,8 +97,8 @@ function TrackDetails({ track, projects }) {
 }
 
 function TrackIdeas({ track, onEditLyricsAfter }) {
-  const ideas = useLiveQuery(() => db.ideas.where('trackId').equals(track.id).reverse().sortBy('createdAt'), [track.id]) || [];
-  const unlinked = useLiveQuery(() => db.ideas.filter((i) => !i.trackId).reverse().sortBy('createdAt'), []) || [];
+  const ideas = useDbQuery(() => db.ideas.where('trackId').equals(track.id).reverse().sortBy('createdAt'), [track.id]) || [];
+  const unlinked = useDbQuery(() => db.ideas.filter((i) => !i.trackId).reverse().sortBy('createdAt'), []) || [];
   const [picking, setPicking] = useState(false);
   const [editing, setEditing] = useState(null);
   const { openCapture } = useCapture();
@@ -163,9 +163,9 @@ function TrackIdeas({ track, onEditLyricsAfter }) {
 export default function TracciaPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const track = useLiveQuery(() => db.tracks.get(id), [id]);
-  const projects = useLiveQuery(() => db.projects.toArray().then((l) => l.sort((a, b) => a.name.localeCompare(b.name))), []) || [];
-  const ideaCount = useLiveQuery(() => db.ideas.where('trackId').equals(id).count(), [id]) || 0;
+  const track = useDbQuery(() => db.tracks.get(id), [id]);
+  const projects = useDbQuery(() => db.projects.toArray().then((l) => l.sort((a, b) => a.name.localeCompare(b.name))), []) || [];
+  const ideaCount = useDbQuery(() => db.ideas.where('trackId').equals(id).count(), [id]) || 0;
   const [tab, setTab] = useState('testo');
   const project = useMemo(() => projects.find((p) => p.id === track?.projectId), [projects, track]);
 

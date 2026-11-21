@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../../db/useDbQuery.js';
 import { addProject, db } from '../../db/db.js';
 import { PROJECT_KINDS, kindLabel } from '../../constants.js';
 import Icon from '../../components/Icon.jsx';
 import Sheet from '../../components/Sheet.jsx';
 
 export default function ProgettiPage() {
-  const projects = useLiveQuery(() => db.projects.orderBy('updatedAt').reverse().toArray(), []);
-  const tracks = useLiveQuery(() => db.tracks.toArray(), []) || [];
+  const projects = useDbQuery(() => db.projects.orderBy('updatedAt').reverse().toArray(), []);
+  const tracks = useDbQuery(() => db.tracks.toArray(), []) || [];
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [kind, setKind] = useState('album');

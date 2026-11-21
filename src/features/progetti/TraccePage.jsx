@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../../db/useDbQuery.js';
 import { addTrack, db } from '../../db/db.js';
 import { STATUSES } from '../../constants.js';
 import Icon from '../../components/Icon.jsx';
 import TrackCard from './TrackCard.jsx';
 
 export default function TraccePage() {
-  const tracks = useLiveQuery(() => db.tracks.orderBy('updatedAt').reverse().toArray(), []);
-  const projects = useLiveQuery(() => db.projects.toArray(), []) || [];
+  const tracks = useDbQuery(() => db.tracks.orderBy('updatedAt').reverse().toArray(), []);
+  const projects = useDbQuery(() => db.projects.toArray(), []) || [];
   const [status, setStatus] = useState('all');
   const navigate = useNavigate();
 

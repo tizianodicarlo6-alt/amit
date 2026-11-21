@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../../db/useDbQuery.js';
 import { addTrack, db, deleteProject, updateProject, updateTrack } from '../../db/db.js';
 import { PROJECT_KINDS } from '../../constants.js';
 import Icon from '../../components/Icon.jsx';
@@ -34,9 +34,9 @@ function ProjectForm({ project }) {
 export default function ProgettoPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const project = useLiveQuery(() => db.projects.get(id), [id]);
-  const tracks = useLiveQuery(() => db.tracks.where('projectId').equals(id).sortBy('order'), [id]) || [];
-  const loose = useLiveQuery(() => db.tracks.filter((t) => !t.projectId).toArray(), []) || [];
+  const project = useDbQuery(() => db.projects.get(id), [id]);
+  const tracks = useDbQuery(() => db.tracks.where('projectId').equals(id).sortBy('order'), [id]) || [];
+  const loose = useDbQuery(() => db.tracks.filter((t) => !t.projectId).toArray(), []) || [];
   const [adding, setAdding] = useState(false);
 
   if (project === undefined) return <div className="page" />;

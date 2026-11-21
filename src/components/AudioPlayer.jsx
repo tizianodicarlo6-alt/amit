@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../db/useDbQuery.js';
 import { db } from '../db/db.js';
 import { formatTime } from '../constants.js';
 import Icon from './Icon.jsx';
 
 // Lettore audio semplice. Accetta un Blob oppure l'id di un audio salvato.
 export default function AudioPlayer({ blob: blobProp, audioId, duration: knownDuration = 0 }) {
-  const stored = useLiveQuery(() => (audioId ? db.audio.get(audioId) : undefined), [audioId]);
+  const stored = useDbQuery(() => (audioId ? db.audio.get(audioId) : undefined), [audioId]);
   const blob = blobProp || stored?.blob;
   const [url, setUrl] = useState(null);
   const [playing, setPlaying] = useState(false);

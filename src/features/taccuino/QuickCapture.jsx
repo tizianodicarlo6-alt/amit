@@ -92,7 +92,7 @@ export default function QuickCapture({ onClose, trackId: initialTrack = null, mo
         </div>
       )}
 
-      {mode && (
+      {(mode === 'text' || (mode === 'voice' && rec.state === 'done')) && (
         <div className="stack">
           <div className="field">
             <span className="field-label">Tag</span>

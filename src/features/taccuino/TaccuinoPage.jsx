@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../../db/useDbQuery.js';
 import { db } from '../../db/db.js';
 import Icon from '../../components/Icon.jsx';
 import { useCapture } from '../../components/CaptureContext.jsx';
@@ -9,8 +9,8 @@ import IdeaSheet from './IdeaSheet.jsx';
 const normalize = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 export default function TaccuinoPage() {
-  const ideas = useLiveQuery(() => db.ideas.orderBy('createdAt').reverse().toArray(), []);
-  const tracks = useLiveQuery(() => db.tracks.toArray(), []) || [];
+  const ideas = useDbQuery(() => db.ideas.orderBy('createdAt').reverse().toArray(), []);
+  const tracks = useDbQuery(() => db.tracks.toArray(), []) || [];
   const [query, setQuery] = useState('');
   const [tag, setTag] = useState(null);
   const [type, setType] = useState('all');
