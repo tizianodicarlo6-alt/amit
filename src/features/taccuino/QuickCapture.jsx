@@ -10,7 +10,7 @@ import { formatTime } from '../../constants.js';
 import NoteEditor from './NoteEditor.jsx';
 
 // Foglio "Nuova idea": scegli testo o voce e salva in due tocchi.
-export default function QuickCapture({ onClose, trackId: initialTrack = null, mode: initialMode = null }) {
+export default function QuickCapture({ onClose, trackId: initialTrack = null, mode: initialMode = null, note = null }) {
   const [mode, setMode] = useState(initialMode); // null | 'text' | 'voice'
   const [text, setText] = useState('');
   const [tags, setTags] = useState([]);
@@ -34,7 +34,7 @@ export default function QuickCapture({ onClose, trackId: initialTrack = null, mo
   };
 
   // scrivere: pagina a tutto schermo, come l'app Note
-  if (mode === 'text') return <NoteEditor trackId={trackId} onClose={onClose} />;
+  if (mode === 'text') return <NoteEditor trackId={trackId} onClose={onClose} start={note} />;
 
   return (
     <Sheet open onClose={onClose} title="Nuova idea">

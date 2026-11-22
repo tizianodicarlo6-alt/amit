@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useDbQuery } from '../../db/useDbQuery.js';
 import { db } from '../../db/db.js';
 import Icon from '../../components/Icon.jsx';
@@ -15,6 +16,15 @@ export default function TaccuinoPage() {
   const [tag, setTag] = useState(null);
   const [type, setType] = useState('all');
   const [editing, setEditing] = useState(null);
+  // aperta dalla sfera ("Idee che ritornano")
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const id = params.get('apri');
+    if (!id || !ideas) return;
+    const i = ideas.find((x) => x.id === id);
+    if (i) setEditing(i);
+    setParams({}, { replace: true });
+  }, [params, ideas]); // eslint-disable-line react-hooks/exhaustive-deps
   const { openCapture } = useCapture();
 
   const trackTitle = useMemo(() => Object.fromEntries(tracks.map((t) => [t.id, t.title || 'Senza titolo'])), [tracks]);

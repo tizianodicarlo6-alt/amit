@@ -23,13 +23,32 @@ const longDate = (ts) =>
 
 // Nota a tutto schermo, come l'app Note: scrivi e basta, si salva da sola.
 // In alto (se vuoi) il beat: scegli col dito il pezzo da sentire in loop mentre scrivi.
-export default function NoteEditor({ idea = null, trackId: initialTrack = null, onClose }) {
+export default function NoteEditor({ idea = null, trackId: initialTrack = null, onClose, start = null }) {
   const [id, setId] = useState(idea?.id || null);
-  const [text, setText] = useState(idea?.text || '');
+  const [text, setText] = useState(idea?.text || start?.text || '');
   const [tags, setTags] = useState(idea?.tags || []);
   const [trackId, setTrackId] = useState(idea?.trackId ?? initialTrack);
-  const [beatId, setBeatId] = useState(idea?.beatId || null);
-  const [loop, setLoop] = useState(idea?.loop || null);
+  const [beatId, setBeatId] = useState(idea?.beatId || start?.beatId || null);
+  const [loop, setLoop] = useState(idea?.loop || start?.loop || null);
+  // sessione flash: conto alla rovescia
+  const [endsAt] = useState(() => (start?.timer ? Date.now() + start.timer * 60000 : null));
+  const [left, setLeft] = useState(start?.timer ? start.timer * 60 : null);
+  useEffect(() => {
+    if (!endsAt) return;
+    const t = setInterval(() => {
+      const s = Math.max(0, Math.round((endsAt - Date.now()) / 1000));
+      setLeft(s);
+      if (s === 0) {
+        clearInterval(t);
+        try {
+          navigator.vibrate?.(300);
+        } catch {
+          /* ignorato */
+        }
+      }
+    }, 1000);
+    return () => clearInterval(t);
+  }, [endsAt]);
   const [sheet, setSheet] = useState(null); // 'info' | 'beat'
   const [rimario, setRimario] = useState(null);
   const [sharing, setSharing] = useState(false);
@@ -110,6 +129,7 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
         <button className="note-back" onClick={close}>
           <Icon name="back" size={22} /> Taccuino
         </button>
+        {left != null && <span className={`flash-timer${left === 0 ? ' done' : ''}`}>{left === 0 ? 'Tempo! 🔥' : `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`}</span>}
         <span className="grow" />
         {profile && text.trim() && <Flame value={fire} />}
         <button className="btn sm ghost" onPointerDown={(e) => e.preventDefault()} onClick={() => setRimario(wordAt(text, caret.current))}>
