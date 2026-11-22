@@ -8,6 +8,7 @@ import { addIdea, addTrack, db, newId, updateIdea, updateTrack } from '../../db/
 import { importBeatFiles } from '../../lib/beatImport.js';
 import { countLineSyllables } from '../../lib/italiano.js';
 import { wordAt } from '../../lib/rimario.js';
+import { logEvent } from '../../lib/stats.js';
 import MelodyBar, { decodeTake, selectedTake } from '../editor/MelodyBar.jsx';
 
 const KEY = 'amit.nanana';
@@ -103,6 +104,7 @@ export default function NananaPage() {
   };
 
   const toTrack = async () => {
+    logEvent('reuse');
     const tid = await addTrack({ title: lines.find((l) => l?.trim())?.slice(0, 40) || 'Nuova traccia' });
     const secId = newId();
     await updateTrack(tid, {

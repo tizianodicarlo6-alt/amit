@@ -7,6 +7,7 @@ import { addTrack, db, updateTrack } from '../../db/db.js';
 import { formatDate } from '../../constants.js';
 import { makeGrid } from '../../lib/loopRegion.js';
 import { sfidaDelGiorno } from '../../lib/sfide.js';
+import { logEvent } from '../../lib/stats.js';
 import { useNavigate } from 'react-router-dom';
 
 /** Crea una traccia (col beat, se c'è) e la apre. */
@@ -141,7 +142,7 @@ export default function InspirationSheet({ onClose, openCapture }) {
           </div>
         </div>
       )}
-      {view === 'ritorno' && <Ritorno onOpen={(i) => (onClose(), navigate(`/taccuino?apri=${i.id}`))} />}
+      {view === 'ritorno' && <Ritorno onOpen={(i) => (logEvent('reuse'), onClose(), navigate(`/taccuino?apri=${i.id}`))} />}
       {view === 'sfida' && <Sfida write={write} />}
       {view === 'flash' && <Flash write={write} />}
       {view !== 'menu' && (

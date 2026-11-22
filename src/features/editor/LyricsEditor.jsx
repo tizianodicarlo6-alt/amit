@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
 import { newSection, updateTrack } from '../../db/db.js';
 import { SECTION_TYPES, RHYME_COLORS, sectionLabel } from '../../constants.js';
@@ -6,6 +6,7 @@ import { analyzeRhymes, countLineSyllables, multiColors, multiKeys, tokenizeLine
 import { wordAt } from '../../lib/rimario.js';
 import RhymeSheet from '../../components/RhymeSheet.jsx';
 import GhostBar, { insertGhostLine, useGhost } from '../../components/GhostBar.jsx';
+import { addBars, logEvent } from '../../lib/stats.js';
 import { useAutosave, SaveStatus } from '../../components/useAutosave.jsx';
 import Icon from '../../components/Icon.jsx';
 
@@ -149,6 +150,13 @@ export default function LyricsEditor({ track, onFocusSection, activeId, targets 
     [allText, mode]
   );
   const caret = useRef({ text: '', pos: 0 });
+  // barre scritte oggi (per i contatori della prova)
+  const filledNow = allText.split('\n').filter((l) => l.trim()).length;
+  const filledRef = useRef(filledNow);
+  useEffect(() => {
+    if (filledNow > filledRef.current) addBars(filledNow - filledRef.current);
+    filledRef.current = Math.max(filledRef.current, filledNow);
+  }, [filledNow]);
   const [rimario, setRimario] = useState(null);
   const openRimario = () => setRimario(wordAt(caret.current.text, caret.current.pos));
   // 👻 barra fantasma: fermo da ~3 minuti nella sezione dove stai scrivendo
@@ -206,6 +214,7 @@ export default function LyricsEditor({ track, onFocusSection, activeId, targets 
         onClose={ghost.dismiss}
         onUse={(g) => {
           if (focusSec) update(focusSec.id, { text: insertGhostLine(focusSec.text, ghostAt, g) });
+          logEvent('reuse');
           ghost.dismiss();
         }}
       />

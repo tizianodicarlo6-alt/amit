@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { db } from '../db/db.js';
 import { buildArchive, suggestGhost } from '../lib/ghost.js';
+import { logEvent } from '../lib/stats.js';
 
 // dopo quanto tempo fermo sulla stessa riga compare (secondi); si può cambiare per le prove
 const delay = () => {
@@ -23,6 +24,7 @@ export function useGhost({ lines, at, exclude, enabled = true }) {
   const lastFilled = useRef(filled);
   const archive = useRef(null);
   const latest = useRef({ lines, at });
+  const stalledAt = useRef(0);
   latest.current = { lines, at };
 
   // una riga nuova = sei ripartito: il fantasma sparisce e il tempo riparte
@@ -30,6 +32,9 @@ export function useGhost({ lines, at, exclude, enabled = true }) {
     if (filled > lastFilled.current) {
       idle.current = 0;
       setList(null);
+      // ripartito entro 10 minuti dal blocco
+      if (stalledAt.current && Date.now() - stalledAt.current < 600000) logEvent('unblock');
+      stalledAt.current = 0;
     }
     lastFilled.current = filled;
   }, [filled]);
@@ -46,6 +51,8 @@ export function useGhost({ lines, at, exclude, enabled = true }) {
       if (s.length) {
         setList(s);
         setIdx(0);
+        stalledAt.current = Date.now();
+        logEvent('stall');
       } else idle.current = 0;
     }, 5000);
     return () => clearInterval(t);

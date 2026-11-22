@@ -7,6 +7,34 @@ import { createBackup, importBackup, markBackupDone } from '../../db/backup.js';
 import { formatDate } from '../../constants.js';
 import Icon from '../../components/Icon.jsx';
 import { enterCode, logout, useProfile } from '../../lib/profile.js';
+import { trialNumbers } from '../../lib/stats.js';
+import { weekStats } from '../../lib/progress.js';
+
+// La prova della v2 (4 settimane): i numeri che dicono se l'app ti fa scrivere di più
+function TrialCard() {
+  const progress = useDbQuery(() => getMeta('progress'), [], null);
+  const n = trialNumbers();
+  const w = weekStats(progress);
+  const pct = (a, b) => (b ? Math.round((a / b) * 100) : null);
+  const rows = [
+    ['Giorni con almeno 4 barre (ultimi 7)', `${n.daysWriting7}/7`, n.daysWriting7 >= 5],
+    ['Provini chiusi questa settimana', `${w.provini}`, w.provini >= 1],
+    ['Idee riprese', n.capture ? `${n.reuse} su ${n.capture} (${pct(n.reuse, n.capture)}%)` : '—', n.capture ? n.reuse / n.capture >= 1 / 3 : false],
+    ['Blocchi superati entro 10 minuti', n.stall ? `${n.unblock} su ${n.stall}` : '—', n.stall ? n.unblock / n.stall >= 0.7 : false],
+  ];
+  return (
+    <section className="card stack trial">
+      <div className="reco-title">La prova della v2</div>
+      <p className="muted small">I traguardi del progetto: 5 giorni su 7 · 1 provino a settimana · 1 idea su 3 ripresa · 7 blocchi su 10 superati.</p>
+      {rows.map(([l, v, ok]) => (
+        <div key={l} className={`trial-row${ok ? ' ok' : ''}`}>
+          <span className="grow">{l}</span>
+          <b>{v}</b>
+        </div>
+      ))}
+    </section>
+  );
+}
 
 // Area soci: il codice personale rende l'app tua (su questo telefono)
 function MemberArea() {
@@ -152,6 +180,7 @@ export default function AltroPage() {
         <h1>Impostazioni</h1>
       </header>
       <MemberArea />
+      <TrialCard />
 
       <section className="card stack">
         <h2>Backup</h2>

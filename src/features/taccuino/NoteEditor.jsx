@@ -10,6 +10,7 @@ import RhymeSheet from '../../components/RhymeSheet.jsx';
 import { loadRank, wordAt } from '../../lib/rimario.js';
 import { quartine } from '../../lib/fuoco.js';
 import { setResume } from '../../lib/resume.js';
+import { addBars, logEvent } from '../../lib/stats.js';
 import GhostBar, { insertGhostLine, useGhost } from '../../components/GhostBar.jsx';
 
 /** Il fuoco: una barra verticale con 4 tacche; dopo ogni quartina il fuoco sale fin dove è arrivata (1-4). */
@@ -68,6 +69,13 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
   const [trackId, setTrackId] = useState(idea?.trackId ?? initialTrack);
   const [beatId, setBeatId] = useState(idea?.beatId || start?.beatId || null);
   const [loop, setLoop] = useState(idea?.loop || start?.loop || null);
+  // barre scritte oggi (per i contatori della prova)
+  const filledNow = text.split('\n').filter((l) => l.trim()).length;
+  const filledRef = useRef(filledNow);
+  useEffect(() => {
+    if (filledNow > filledRef.current) addBars(filledNow - filledRef.current);
+    filledRef.current = Math.max(filledRef.current, filledNow);
+  }, [filledNow]);
   // ricordo questa nota per "Riprendi da dove eri"
   useEffect(() => {
     if (id) setResume({ kind: 'note', id, title: title.trim() || text.trim().split('\n')[0].slice(0, 40) || 'Nota' });
@@ -225,6 +233,7 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
         onClose={ghost.dismiss}
         onUse={(g) => {
           setText((t) => insertGhostLine(t, caretLine, g));
+          logEvent('reuse');
           ghost.dismiss();
         }}
       />

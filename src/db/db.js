@@ -263,7 +263,14 @@ export async function requestPersistence() {
 }
 
 // ---------- Funzioni esportate (con ricollegamento automatico) ----------
-export const addIdea = (...args) => withDb(() => addIdeaRaw(...args));
+export const addIdea = (...args) => (logCapture(), withDb(() => addIdeaRaw(...args)));
+const logCapture = () => {
+  try {
+    import('../lib/stats.js').then((m) => m.logEvent('capture'));
+  } catch {
+    /* ignorato */
+  }
+};
 export const updateIdea = (...args) => withDb(() => updateIdeaRaw(...args));
 export const deleteIdea = (...args) => withDb(() => deleteIdeaRaw(...args));
 export const addProject = (...args) => withDb(() => addProjectRaw(...args));

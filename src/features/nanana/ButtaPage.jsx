@@ -6,6 +6,7 @@ import { useDbQuery } from '../../db/useDbQuery.js';
 import { addIdea, addTrack, db, newId, updateIdea, updateTrack } from '../../db/db.js';
 import { loadRank } from '../../lib/rimario.js';
 import { sistema } from '../../lib/sistema.js';
+import { logEvent } from '../../lib/stats.js';
 
 const KEY = 'amit.butta';
 const load = () => {
@@ -68,6 +69,7 @@ export default function ButtaPage() {
     navigate(`/taccuino?apri=${nid}`);
   };
   const toTrack = async () => {
+    logEvent('reuse');
     const lines = chosen();
     const tid = await addTrack({ title: titleOf() });
     const secId = newId();
