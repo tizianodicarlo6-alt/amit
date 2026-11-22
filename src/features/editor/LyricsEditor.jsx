@@ -59,7 +59,7 @@ function Toggle({ on, onChange, label }) {
 }
 
 // Una riga "disegnata" sotto al campo di testo: parole colorate + sillabe.
-const Line = memo(function Line({ line, analysis, showRhymes, showSyllables }) {
+const Line = memo(function Line({ line, analysis, showRhymes, showSyllables, target }) {
   const syl = showSyllables && line.trim() ? countLineSyllables(line) : null;
   let content;
   if (!line) content = '​';
@@ -98,19 +98,25 @@ const Line = memo(function Line({ line, analysis, showRhymes, showSyllables }) {
   return (
     <div className="lyr-line">
       {content}
-      {syl !== null && <span className="syl">{syl}</span>}
+      {syl !== null && (
+        <span className={`syl${target ? (syl === target ? ' fit' : Math.abs(syl - target) <= 1 ? ' near' : ' off') : ''}`}>
+          {syl}
+          {target ? `/${target}` : ''}
+        </span>
+      )}
+      {syl === null && target && showSyllables && <span className="syl target">{target}</span>}
     </div>
   );
 });
 
 // Campo di testo trasparente sopra al "disegno": si scrive normalmente, si vedono i colori.
-function SectionText({ text, onChange, analysis, showRhymes, showSyllables, onFocus, onCaret }) {
+function SectionText({ text, onChange, analysis, showRhymes, showSyllables, onFocus, onCaret, targets }) {
   const lines = text.split('\n');
   return (
     <div className={`lyr${showSyllables ? ' with-syl' : ''}`}>
       <div className="lyr-back" aria-hidden="true">
         {lines.map((l, i) => (
-          <Line key={i} line={l} analysis={analysis} showRhymes={showRhymes} showSyllables={showSyllables} />
+          <Line key={i} line={l} analysis={analysis} showRhymes={showRhymes} showSyllables={showSyllables} target={targets?.[i]} />
         ))}
       </div>
       <textarea
@@ -128,7 +134,7 @@ function SectionText({ text, onChange, analysis, showRhymes, showSyllables, onFo
   );
 }
 
-export default function LyricsEditor({ track, onFocusSection, activeId }) {
+export default function LyricsEditor({ track, onFocusSection, activeId, targets = {} }) {
   const [sections, setSections] = useState(() => (track.sections?.length ? track.sections : [newSection('strofa')]));
   const [mode, setMode] = useState(readMode);
   const showRhymes = mode !== 'off';
@@ -232,7 +238,7 @@ export default function LyricsEditor({ track, onFocusSection, activeId }) {
                 <Icon name="trash" size={18} />
               </button>
             </div>
-            <SectionText onCaret={(text, pos) => (caret.current = { text, pos })} onFocus={() => onFocusSection?.(s.id)} text={s.text} onChange={(text) => update(s.id, { text })} analysis={analysis} showRhymes={showRhymes} showSyllables={showSyllables} />
+            <SectionText targets={targets[s.id]} onCaret={(text, pos) => (caret.current = { text, pos })} onFocus={() => onFocusSection?.(s.id)} text={s.text} onChange={(text) => update(s.id, { text })} analysis={analysis} showRhymes={showRhymes} showSyllables={showSyllables} />
           </section>
         );
       })}

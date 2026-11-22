@@ -8,7 +8,7 @@ import { makeGrid, moveRegion, regionFromDrag, regionLabel, resizeRegion } from 
 
 // beat decodificati (per non rifarlo ogni volta che apri la pagina)
 const cache = new Map();
-async function decodeBeat(audioId) {
+export async function decodeBeat(audioId) {
   if (cache.has(audioId)) return cache.get(audioId);
   const p = (async () => {
     const rec = await db.audio.get(audioId);
@@ -28,12 +28,22 @@ async function decodeBeat(audioId) {
 }
 
 /** Solo il pezzo [from, to] del beat, come WAV: col lettore in loop gira senza buchi. */
-function sliceWav(buf, from, to) {
+function sliceWav(buf, from, to, overlay = null) {
   const sr = buf.sampleRate;
   const a = Math.max(0, Math.round(from * sr));
   const b = Math.min(buf.length, Math.round(to * sr));
   const chans = [];
   for (let c = 0; c < Math.min(2, buf.numberOfChannels); c++) chans.push(buf.getChannelData(c).slice(a, b));
+  // la tua melodia (nanana) sopra il beat: allineata al suo inizio
+  if (overlay?.samples) {
+    const off = Math.round((overlay.from - from) * sr);
+    const g = overlay.gain ?? 1.4;
+    for (const ch of chans)
+      for (let i = 0; i < ch.length; i++) {
+        const j = i - off;
+        if (j >= 0 && j < overlay.samples.length) ch[i] = Math.max(-1, Math.min(1, ch[i] * 0.8 + overlay.samples[j] * g));
+      }
+  }
   return encodeWav(chans, sr);
 }
 
@@ -44,7 +54,7 @@ const HANDLE = 22; // px: quanto vicino al bordo per allargare
  * la sposti trascinandola, la allarghi tirando i bordi. Un tocco fuori dalla zona: suona da lì (senza loop).
  * marks: zone già salvate per le altre sezioni [{ id, label, from, to, active }].
  */
-export default function BeatLoop({ beat, region, onRegion, marks = [], caption, attack: knownAttack = null }) {
+export default function BeatLoop({ beat, region, onRegion, marks = [], caption, attack: knownAttack = null, overlay = null, children, pauseSignal = 0 }) {
   const [decoded, setDecoded] = useState(null);
   const [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -56,6 +66,8 @@ export default function BeatLoop({ beat, region, onRegion, marks = [], caption, 
   const waveRef = useRef(null);
   const drag = useRef(null);
   const pendingSeek = useRef(null);
+  const overlayRef = useRef(overlay);
+  overlayRef.current = overlay;
   const regionRef = useRef(region);
   regionRef.current = region;
 
@@ -115,13 +127,14 @@ export default function BeatLoop({ beat, region, onRegion, marks = [], caption, 
     } catch {
       /* non supportato */
     }
-    const key = r ? `${r.from}-${r.to}` : 'full';
+    const ov = overlayRef.current;
+    const key = r ? `${r.from}-${r.to}${ov ? `|${ov.id}` : ''}` : 'full';
     if (srcKey.current !== key) {
       let blob;
       if (r) {
         setBusy(true);
         const d = decoded || (await decodeBeat(beat.audioId));
-        blob = sliceWav(d.buf, r.from, r.to);
+        blob = sliceWav(d.buf, r.from, r.to, ov);
         setBusy(false);
       } else blob = decoded?.blob || (await db.audio.get(beat.audioId))?.blob;
       if (!blob) return;
@@ -155,13 +168,18 @@ export default function BeatLoop({ beat, region, onRegion, marks = [], caption, 
   // la zona è cambiata mentre suona: continuo dentro la nuova zona
   useEffect(() => {
     if (!playing) return;
-    const key = region ? `${region.from}-${region.to}` : 'full';
+    const key = region ? `${region.from}-${region.to}${overlay ? `|${overlay.id}` : ''}` : 'full';
     if (key === srcKey.current) return;
     const now = pendingSeek.current ?? pos ?? 0;
     pendingSeek.current = null;
     const inside = region && now >= region.from && now < region.to;
     start(region, inside ? now : region ? region.from : now).catch(() => setPlaying(false));
-  }, [region?.from, region?.to]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [region?.from, region?.to, overlay?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // qualcuno (es. la registrazione) chiede di fermare il beat
+  useEffect(() => {
+    if (pauseSignal) stop();
+  }, [pauseSignal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onPlay = () => {
     if (playing) return stop();
@@ -273,6 +291,7 @@ export default function BeatLoop({ beat, region, onRegion, marks = [], caption, 
         )}
         {pos != null && <span className="bl-head" style={{ left: pct(pos) }} />}
       </div>
+      {children}
     </div>
   );
 }
