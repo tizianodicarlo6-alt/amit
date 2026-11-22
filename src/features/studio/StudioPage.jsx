@@ -55,7 +55,9 @@ export default function StudioPage() {
   const [view, setView] = useState('mix'); // 'mix' = lo Studio (tracce, come Logic) · 'rec' = il testo mentre registri
   const [selCh, setSelCh] = useState('main'); // canale scelto (inspector)
   const autoBackRef = useRef(false); // dopo una registrazione partita dal tasto Rec torno allo Studio
-  const [solo, setSolo] = useState([]); // take in "solo" (si sentono solo quelle)
+  // M e S dei canali (beat, voce, doppie, adlib): come in Logic. Il ref serve per suonare subito dal tocco.
+  const mixRef = useRef({ mute: null, solo: [] });
+  const [mixCh, setMixCh] = useState({ mute: {}, solo: [] });
   const [editTick, setEditTick] = useState(0);
   const playFromRef = useRef(null);
   const [sync, setSync] = useState(null); // { queue: [blockId...], marked: n } durante "Segna a orecchio"
@@ -101,6 +103,12 @@ export default function StudioPage() {
   const setChannel = (role, c) => {
     setTrackStudio({ channels: { ...channels, [role]: { ...(channels[role] || {}), ...c } } });
     setEditTick((x) => x + 1);
+  };
+  if (track && !mixRef.current.mute) mixRef.current = { mute: Object.fromEntries(Object.entries(channels).filter(([, c]) => c.mute).map(([r]) => [r, true])), solo: [] };
+  const audible = (role, ignoreSolo = false) => {
+    const { mute, solo } = mixRef.current;
+    if (!ignoreSolo && solo.length) return solo.includes(role);
+    return !(mute || {})[role];
   };
   const fxCount = (role) => Object.values(chFx(role)).filter((x) => x.on).length;
 
@@ -179,8 +187,7 @@ export default function StudioPage() {
 
   // Voci da mixare (take accese, oppure solo quelle in `only`) col buffer audio caricato
   const loadVoices = async ({ only = null, vGain = voiceGain, latOverride = lat, ignoreSolo = false } = {}) => {
-    if (!only && !ignoreSolo && solo.length) only = solo; // "S": si sentono solo quelle
-    const list = only ? takes.filter((t) => only.includes(t.id)) : takes.filter((t) => t.included !== false);
+    const list = only ? takes.filter((t) => only.includes(t.id)) : takes.filter((t) => t.included !== false && audible(t.role || 'main', ignoreSolo));
     // buffer con l'eventuale pitch già applicato
     const withBuf = await Promise.all(list.map(async (t) => ({ ...t, buffer: engine.pitched(t.audioId, await loadTakeBuffer(t), t.pitch || 0) })));
     return buildVoices(withBuf, { lat: latOverride, voiceGain: vGain, only }).map((v) => {
@@ -286,15 +293,16 @@ export default function StudioPage() {
   // Riascolto col lettore normale dell'iPhone (suona sempre, anche col silenzioso)
   const playFrom = async (from, { only = null, fxId = fx, beatOnly = false, vGain = voiceGain, latOverride = lat } = {}) => {
     if (!beatBuf || !beat) return;
-    engine.primePlayer(); // dentro il tocco: sblocca il lettore
     cancelAnimationFrame(rafRef.current);
     engine.stop();
+    engine.primePlayer(); // dentro il tocco: sblocca il lettore (dopo lo stop, così riparte anche se stava suonando)
     setError('');
     setModeBoth('loading');
     try {
       const voices = beatOnly ? [] : await loadVoices({ only, vGain, latOverride });
-      if (voices.length) {
-        await engine.playMixMedia({ beat: beatBuf, voices, from, beatGain: beatVol, bpm, fx: fxId });
+      const beatOn = only || audible('beat');
+      if (voices.length || !beatOn) {
+        await engine.playMixMedia({ beat: beatBuf, voices, from, beatGain: beatOn ? beatVol : 0, bpm, fx: fxId });
       } else {
         await engine.playBeatMedia(beat.audioId, from, beatBuf.duration);
       }
@@ -309,6 +317,19 @@ export default function StudioPage() {
 
   playFromRef.current = playFrom;
   const onEdited = () => setEditTick((x) => x + 1);
+  // M / S su un canale: cambia subito quello che senti (riparto dal punto in cui eri, dentro il tocco)
+  const toggleCh = (role, kind) => {
+    const cur = mixRef.current;
+    const mute = { ...(cur.mute || {}) };
+    let solo = cur.solo;
+    if (kind === 'm') {
+      mute[role] = !mute[role];
+      setTrackStudio({ channels: { ...channels, [role]: { ...(channels[role] || {}), mute: mute[role] } } });
+    } else solo = solo.includes(role) ? solo.filter((r) => r !== role) : [...solo, role];
+    mixRef.current = { mute, solo };
+    setMixCh({ mute, solo });
+    if (modeRef.current === 'playing') playFrom(Math.max(0, engine.position() || 0));
+  };
   useEffect(() => {
     if (!editTick || modeRef.current !== 'playing') return;
     const t = setTimeout(() => playFromRef.current?.(Math.max(0, engine.position() || 0)), 150); // aspetto che il database si aggiorni
@@ -544,8 +565,8 @@ export default function StudioPage() {
           onSeek={onSeek}
           onPlay={onPlay}
           onEdited={onEdited}
-          solo={solo}
-          setSolo={setSolo}
+          mixCh={mixRef.current.mute ? mixRef.current : mixCh}
+          onToggleCh={toggleCh}
           onOpenFx={() => setSheet('fx')}
           onAudition={(t) =>
             // dopo che il database si è aggiornato, suono solo quel pezzo da poco prima che attacchi

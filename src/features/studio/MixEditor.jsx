@@ -31,7 +31,8 @@ function Bars({ peaks, width, height = 36 }) {
  * blocchi da tagliare, spostare, dividere, con volume e pitch.
  */
 export default function MixEditor(p) {
-  const { takes, beat, duration, blocks, position, playing, loading, lat, engine, loadTakeBuffer, solo, setSolo } = p;
+  const { takes, beat, duration, blocks, position, playing, loading, lat, engine, loadTakeBuffer } = p;
+  const mixCh = p.mixCh || { mute: {}, solo: [] };
   const [zoomIdx, setZoomIdx] = useState(2);
   const pps = ZOOMS[zoomIdx];
   const [selectedId, setSelectedId] = useState(null);
@@ -195,18 +196,22 @@ export default function MixEditor(p) {
     return { list, n: Math.max(1, ends.length) };
   };
   const chTakes = (role) => takes.filter((t) => (t.role || 'main') === role);
-  const chMuted = (role) => chTakes(role).length > 0 && chTakes(role).every((t) => t.included === false);
-  const chSolo = (role) => chTakes(role).length > 0 && chTakes(role).every((t) => solo.includes(t.id));
-  const toggleChMute = async (role) => {
-    const m = chMuted(role);
-    for (const t of chTakes(role)) await updateTake(t.id, { included: m });
-    p.onEdited();
-  };
-  const toggleChSolo = (role) => {
-    const ids = chTakes(role).map((t) => t.id);
-    setSolo((s) => (chSolo(role) ? s.filter((x) => !ids.includes(x)) : [...new Set([...s, ...ids])]));
-    p.onEdited();
-  };
+  const chMuted = (role) => !!mixCh.mute?.[role];
+  const chSolo = (role) => mixCh.solo.includes(role);
+  // canale che in questo momento non si sente (muto, oppure c'è un altro canale in solo)
+  const chSilent = (role) => (mixCh.solo.length ? !chSolo(role) : chMuted(role));
+  const toggleChMute = (role) => p.onToggleCh?.(role, 'm');
+  const toggleChSolo = (role) => p.onToggleCh?.(role, 's');
+  const MS = ({ id, name }) => (
+    <>
+      <button className={`m${chMuted(id) ? ' on' : ''}`} onClick={(e) => (e.stopPropagation(), toggleChMute(id))} aria-label={`Muto ${name}`}>
+        M
+      </button>
+      <button className={`s${chSolo(id) ? ' on' : ''}`} onClick={(e) => (e.stopPropagation(), toggleChSolo(id))} aria-label={`Solo ${name}`}>
+        S
+      </button>
+    </>
+  );
   const selCh = p.selCh || 'main';
   const ch = p.channels?.[selCh] || {};
   const LANE_H = 44;
@@ -246,9 +251,10 @@ export default function MixEditor(p) {
               ))}
             </div>
           </div>
-          <div className="arr2-row beat">
+          <div className={`arr2-row beat${chSilent('beat') ? ' silent' : ''}`}>
             <div className="lab">
               <span className="lab-name">Beat</span>
+              <span className="ms">{MS({ id: 'beat', name: 'Beat' })}</span>
             </div>
             <div className="lane" style={{ width: contentW }} onClick={(e) => p.onSeek(laneTime(e))}>
               {beat?.peaks && <Bars peaks={beat.peaks} width={duration * pps} height={30} />}
@@ -264,16 +270,11 @@ export default function MixEditor(p) {
             const { list, n } = lanesOf(c.id);
             const armed = p.recRole === c.id;
             return (
-              <div key={c.id} className={`arr2-row take ch${selCh === c.id && !selected ? ' sel' : ''}`} style={{ height: n * LANE_H + 10 }}>
+              <div key={c.id} className={`arr2-row take ch${selCh === c.id && !selected ? ' sel' : ''}${chSilent(c.id) ? ' silent' : ''}`} style={{ height: n * LANE_H + 10 }}>
                 <div className={`lab role-${c.id}`} onClick={() => (setSelectedId(null), p.setSelCh?.(c.id))}>
                   <span className="lab-name">{c.name}</span>
                   <span className="ms">
-                    <button className={`m${chMuted(c.id) ? ' on' : ''}`} onClick={(e) => (e.stopPropagation(), toggleChMute(c.id))} aria-label={`Muto ${c.name}`}>
-                      M
-                    </button>
-                    <button className={`s${chSolo(c.id) ? ' on' : ''}`} onClick={(e) => (e.stopPropagation(), toggleChSolo(c.id))} aria-label={`Solo ${c.name}`}>
-                      S
-                    </button>
+                    {MS(c)}
                     <button className={`r${armed ? ' on' : ''}`} onClick={(e) => (e.stopPropagation(), p.setRecRole?.(c.id))} aria-label={`Registra su ${c.name}`}>
                       R
                     </button>
@@ -286,7 +287,7 @@ export default function MixEditor(p) {
                     return (
                       <div
                         key={t.id}
-                        className={`region role-${c.id}${sel ? ' sel' : ''}${muted ? ' off' : ''}${solo.includes(t.id) ? ' solo' : ''}`}
+                        className={`region role-${c.id}${sel ? ' sel' : ''}${muted ? ' off' : ''}${chSolo(c.id) ? ' solo' : ''}`}
                         style={{ left: g.left, width: g.width, top: 5 + lane * LANE_H, height: LANE_H - 8, bottom: 'auto' }}
                         onPointerDown={(e) => onDown(e, t, 'move')}
                         onClick={(e) => e.stopPropagation()}

@@ -370,6 +370,8 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .region.role-adlib { background: rgba(245, 165, 36, 0.22); border-color: rgba(245, 165, 36, 0.75); }
 .region.sel { border: 2px solid #fff; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15); z-index: 2; }
 .region.off { opacity: 0.35; }
+.arr2-row.silent .lane { opacity: 0.3; }
+.arr2-row.beat .lab { gap: 3px; }
 .reg-inner { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; pointer-events: none; }
 .reg-wave rect { fill: rgba(255, 255, 255, 0.75); }
 .reg-name { position: absolute; left: 4px; top: 2px; font-size: 9px; font-weight: 700; color: #fff; text-shadow: 0 1px 2px #000; white-space: nowrap; pointer-events: none; }
@@ -399,7 +401,7 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .arr2-inner { position: relative; min-height: 100%; }
 .arr2-row { display: flex; height: 54px; border-bottom: 1px solid var(--border); }
 .arr2-row.ruler { height: 26px; position: sticky; top: 0; z-index: 6; background: #0a0a0c; }
-.arr2-row.beat { height: 40px; }
+.arr2-row.beat { height: 50px; }
 .arr2-row .lab { position: sticky; left: 0; z-index: 5; width: 96px; flex: none; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 6px 0 8px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); cursor: pointer; }
 .arr2-row .lab.corner { z-index: 7; }
 .arr2-row.take.sel .lab { background: #24242a; color: #fff; }
