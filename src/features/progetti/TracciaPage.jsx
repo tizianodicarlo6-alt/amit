@@ -17,6 +17,7 @@ import { atmoOf, vibeLabel } from '../../lib/spunti.js';
 import { useProfile } from '../../lib/profile.js';
 import ShareSheet from '../messaggi/ShareSheet.jsx';
 import ProvinoClose from './ProvinoClose.jsx';
+import Quadra from './Quadra.jsx';
 import { MapCard } from '../ispirazione/ParliamonePage.jsx';
 import IdeaCard from '../taccuino/IdeaCard.jsx';
 import IdeaSheet from '../taccuino/IdeaSheet.jsx';
@@ -291,6 +292,7 @@ function WriteOnBeat({ track }) {
     .map(([id, r]) => ({ id, label: labels[id], from: r.from, to: r.to, active: id === active }));
   return (
     <>
+      <Quadra track={track} activeId={active} />
       {beat && (
         <BeatLoop
           beat={beat}

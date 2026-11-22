@@ -775,3 +775,13 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .sis-row { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; font-size: 16px; }
 .sis-row input { width: 20px; height: 20px; margin-top: 2px; flex: none; }
 .nobeat-card { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; color: var(--text); margin-bottom: 10px; }
+
+/* Quadra della traccia */
+.quadra-mini { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; font-size: 14px; }
+.qm-k { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.qm-dot { width: 9px; height: 9px; border-radius: 50%; background: #ffd23f; box-shadow: 0 0 6px #ffd23f; }
+.quadra { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); margin-bottom: 10px; }
+.qd-field { display: flex; flex-direction: column; gap: 4px; }
+.qd-field > span { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.qd-field.on > span { color: #fff; }
+.strade { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
