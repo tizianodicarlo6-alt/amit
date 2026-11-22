@@ -785,3 +785,7 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .qd-field > span { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .qd-field.on > span { color: #fff; }
 .strade { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.bl-map { position: relative; height: 22px; margin-top: 6px; }
+.bl-sec { position: absolute; top: 0; height: 20px; border: 0; border-radius: 5px; font-size: 10px; font-weight: 800; color: #000; background: #8a8a94; padding: 0 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border-right: 2px solid #0b0b0e; }
+.bl-sec.k-rit { background: #ffd23f; } .bl-sec.k-strofa { background: #4c9aff; } .bl-sec.k-break { background: #b26cf5; }
+.bl-sec.on { outline: 2px solid #fff; outline-offset: 1px; }

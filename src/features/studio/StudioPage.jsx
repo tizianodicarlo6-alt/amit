@@ -566,6 +566,7 @@ export default function StudioPage() {
           channels={channels}
           setChannel={setChannel}
           fxCount={fxCount}
+          beatMap={beat?.map}
           onOpenChannelFx={(role) => (setSelCh(role), setSheet('chfx'))}
         />
       )}

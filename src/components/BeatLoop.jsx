@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Icon from './Icon.jsx';
-import { db } from '../db/db.js';
+import { db, updateBeat } from '../db/db.js';
+import { beatMap } from '../lib/beatMap.js';
 import { encodeWav } from '../lib/wav.js';
 import { computePeaks, toAnalysisSamples } from '../lib/audio.js';
 import { detectAttack } from '../lib/analysis.js';
@@ -79,7 +80,19 @@ export default function BeatLoop({ beat, region, onRegion, marks = [], caption, 
   useEffect(() => {
     let alive = true;
     decodeBeat(beat.audioId)
-      .then((d) => alive && setDecoded(d))
+      .then((d) => {
+        if (!alive) return;
+        setDecoded(d);
+        // la mappa del beat (intro, strofe, rit…) si calcola una volta e si salva sul beat
+        if (beat.bpm && !beat.map) {
+          try {
+            const m = beatMap(d.buf.getChannelData(0), d.buf.sampleRate, { bpm: beat.bpm, anchor: d.attack || 0 });
+            if (m.length) updateBeat(beat.id, { map: m });
+          } catch {
+            /* la mappa è un aiuto, non serve per suonare */
+          }
+        }
+      })
       .catch(() => {});
     return () => {
       alive = false;
@@ -265,6 +278,21 @@ export default function BeatLoop({ beat, region, onRegion, marks = [], caption, 
           </button>
         )}
       </div>
+      {beat.map?.length > 1 && (
+        <div className="bl-map" aria-label="Mappa del beat">
+          {beat.map.map((m) => (
+            <button
+              key={m.start}
+              className={`bl-sec k-${m.kind}${region && Math.abs(region.from - m.start) < 0.05 && Math.abs(region.to - m.end) < 0.05 ? ' on' : ''}`}
+              style={{ left: pct(m.start), width: pct(m.end - m.start) }}
+              onClick={() => onRegion({ from: m.start, to: Math.min(m.end, duration) })}
+              title={`Loop su ${m.label}`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="bl-marks">
         {marks
           .filter((m) => m.from != null)
