@@ -43,7 +43,9 @@ export default function NananaPage() {
   const navigate = useNavigate();
   const [s, setS] = useState(load); // { beatId, region, melody, lines }
   const set = (c) => setS((o) => ({ ...o, ...c }));
-  useEffect(() => save(s), [s]);
+  useEffect(() => {
+    save(s);
+  }, [s]);
   const beats = useDbQuery(() => db.beats.orderBy('createdAt').reverse().toArray(), [], []) || [];
   const beat = beats.find((b) => b.id === s.beatId) || null;
   const [overlay, setOverlay] = useState(null);

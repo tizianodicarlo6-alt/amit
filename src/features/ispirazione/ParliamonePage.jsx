@@ -91,8 +91,12 @@ export default function ParliamonePage() {
   useEffect(() => {
     if (profile) startCloud();
   }, [profile]);
-  useEffect(() => store(conv), [conv]);
-  useEffect(() => endRef.current?.scrollIntoView({ block: 'end' }), [conv?.view?.length, busy]);
+  useEffect(() => {
+    store(conv);
+  }, [conv]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: 'end' }); // (nei browser nuovi restituisce una Promise: niente return)
+  }, [conv?.view?.length, busy]);
 
   if (!profile) return <div className="page empty">Parliamone è per i soci di Amit Studio.</div>;
 
@@ -122,7 +126,15 @@ export default function ParliamonePage() {
     setBusy('map');
     setErr('');
     try {
-      const r = await callFunction(CLOUD.assistant, { mode: 'map', context: conv.context, messages: conv.api });
+      // la chiacchierata in un pezzo solo (il modello gratuito la gestisce meglio); un secondo tentativo se sbaglia
+      const transcript = conv.api.map((m) => `${m.role === 'user' ? conv.context.name || 'Io' : 'Assistente'}: ${m.content}`).join('\n');
+      const ask = () => callFunction(CLOUD.assistant, { mode: 'map', context: conv.context, messages: [{ role: 'user', content: transcript }] });
+      let r;
+      try {
+        r = await ask();
+      } catch {
+        r = await ask();
+      }
       const map = r.data || {};
       setConv({ ...conv, map, view: [...conv.view, { who: 'map', map }] });
     } catch (e) {

@@ -21,7 +21,7 @@ export const CLOUD = {
   url: 'https://ldrcytilqvzssmdbolka.supabase.co',
   key: 'sb_publishable_FVSrubLoIcnVBZo5kudS4w_hCuT6W1F',
   domain: 'amit-studio.app',
-  assistant: 'parliamone-', // nome della funzione dell'assistente su Supabase
+  assistant: 'smart-handler', // nome della funzione dell'assistente su Supabase
   members: [
     { id: 'kraken', name: 'Kraken' },
     { id: 'shower', name: 'Shower' },
