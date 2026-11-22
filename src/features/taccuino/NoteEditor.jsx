@@ -7,9 +7,7 @@ import TagPicker from '../../components/TagPicker.jsx';
 import TrackPicker from '../../components/TrackPicker.jsx';
 import BeatLoop from '../../components/BeatLoop.jsx';
 import RhymeSheet from '../../components/RhymeSheet.jsx';
-import { loadRank, wordAt } from '../../lib/rimario.js';
-import Flame from '../../components/Flame.jsx';
-import { heatLines, sectionFire } from '../../lib/fuoco.js';
+import { wordAt } from '../../lib/rimario.js';
 import ShareSheet from '../messaggi/ShareSheet.jsx';
 import { useProfile } from '../../lib/profile.js';
 
@@ -53,11 +51,7 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
   const [rimario, setRimario] = useState(null);
   const [sharing, setSharing] = useState(false);
   const profile = useProfile();
-  const [rank, setRank] = useState(null);
-  useEffect(() => {
-    if (profile) loadRank().then(setRank).catch(() => {});
-  }, [profile]);
-  const fire = profile && text.trim() ? sectionFire(heatLines(text.split('\n'), { rank })) : 0;
+
   const caret = useRef(0);
   const [created] = useState(idea?.createdAt || Date.now());
   const navigate = useNavigate();
@@ -131,7 +125,6 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
         </button>
         {left != null && <span className={`flash-timer${left === 0 ? ' done' : ''}`}>{left === 0 ? 'Tempo! 🔥' : `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`}</span>}
         <span className="grow" />
-        {profile && text.trim() && <Flame value={fire} />}
         <button className="btn sm ghost" onPointerDown={(e) => e.preventDefault()} onClick={() => setRimario(wordAt(text, caret.current))}>
           Rimario
         </button>
@@ -141,7 +134,7 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
         <button className="icon-btn" onClick={() => setSheet('info')} aria-label="Tag, traccia e altro">
           <Icon name="altro" size={22} />
         </button>
-        <button className="note-done" onClick={() => (document.activeElement?.blur(), saveNow())}>
+        <button className="note-done" onClick={close}>
           Fine
         </button>
       </header>

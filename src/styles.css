@@ -675,19 +675,16 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .nn-count { min-width: 44px; text-align: right; font-size: 13px; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
 .nn-count.fit { color: #3ddc84; } .nn-count.near { color: #f5c542; } .nn-count.off { color: #ff6b6b; }
 
-/* 🔥 Fuoco */
-.flame { position: relative; display: inline-block; width: 26px; height: 30px; opacity: calc(.25 + var(--f) * .75); transform: scale(calc(.55 + var(--f) * .55)); transform-origin: 50% 100%; transition: transform .5s, opacity .5s; }
-.flame .fl { position: absolute; left: 50%; bottom: 0; border-radius: 50% 0 50% 50%; transform: translateX(-50%) rotate(-45deg); animation: flick calc(1.6s - var(--f) * .9s) ease-in-out infinite alternate; }
-.flame .outer { width: 20px; height: 20px; bottom: 4px; background: radial-gradient(circle at 70% 30%, #ffd24a, #ff7a1a 55%, #d7261e); filter: blur(.3px); box-shadow: 0 0 calc(var(--f) * 18px) rgba(255, 120, 30, calc(var(--f) * .9)); }
-.flame .inner { width: 9px; height: 9px; bottom: 4px; background: radial-gradient(circle at 70% 30%, #fff8d0, #ffd24a); animation-delay: -.3s; }
-.flame.burst { animation: burst .7s ease-out; }
-@keyframes flick { 0% { transform: translateX(-50%) rotate(-45deg) scale(1); } 50% { transform: translateX(-52%) rotate(-41deg) scale(1.06, .96); } 100% { transform: translateX(-48%) rotate(-49deg) scale(.97, 1.05); } }
-@keyframes burst { 0% { filter: brightness(1); } 30% { filter: brightness(1.8) drop-shadow(0 0 12px #ff8a2a); transform: scale(1.35); } 100% { filter: brightness(1); } }
-@media (prefers-reduced-motion: reduce) { .flame .fl, .flame.burst { animation: none; } }
-.ember { display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50% 0 50% 50%; transform: rotate(-45deg) translateY(-1px); vertical-align: middle; }
-.ember.h1 { background: #7a3a1e; }
-.ember.h2 { background: #ff7a1a; box-shadow: 0 0 4px #ff7a1a; }
-.ember.h3 { width: 9px; height: 9px; background: radial-gradient(circle at 70% 30%, #ffe27a, #ff5a1a); box-shadow: 0 0 8px #ff6a1a; }
+/* 🔥 Il fuoco: barra laterale riga per riga + premio per la strofa tecnica */
+.heatseg { position: absolute; left: -11px; top: 4px; bottom: 4px; width: 4px; border-radius: 2px; background: #26262c; transition: background .4s, box-shadow .4s; }
+.heatseg.h1 { background: #7a3b18; }
+.heatseg.h2 { background: #ff7a1a; box-shadow: 0 0 6px rgba(255, 122, 26, .6); }
+.heatseg.h3 { background: linear-gradient(to top, #ff5a1a, #ffd24a); box-shadow: 0 0 10px rgba(255, 170, 40, .8); }
+.lyr.hot .heatseg.h2, .lyr.hot .heatseg.h3 { animation: heatglow 1.8s ease-in-out infinite alternate; }
+@keyframes heatglow { from { filter: brightness(1); } to { filter: brightness(1.45); } }
+.tech-badge { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; color: #1a0d00; background: linear-gradient(90deg, #ff8a2a, #ffd24a, #ff8a2a); background-size: 200% 100%; animation: shine 2.4s linear infinite; }
+@keyframes shine { from { background-position: 0 0; } to { background-position: 200% 0; } }
+@media (prefers-reduced-motion: reduce) { .tech-badge, .lyr.hot .heatseg { animation: none; } }
 
 /* Sfera: quattro riquadri */
 .insp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -703,3 +700,17 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .chip.ghosty { opacity: .6; }
 .flash-timer { font-variant-numeric: tabular-nums; font-weight: 800; font-size: 15px; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); }
 .flash-timer.done { background: #ff5a1a; color: #fff; }
+
+/* Catena di rime (allenamento) */
+.catena { padding-bottom: calc(40px + var(--safe-b)); }
+.cat-word { font-size: 40px; font-weight: 900; text-align: center; padding: 6px 0 0; }
+.cat-lines { display: flex; flex-direction: column; gap: 8px; }
+.cat-line { display: flex; align-items: center; gap: 8px; }
+.cat-line.gap { margin-top: 10px; }
+.cat-line .input { flex: 1; min-width: 0; }
+.cat-res { width: 92px; flex: none; display: flex; flex-direction: column; align-items: flex-end; font-size: 12px; font-weight: 800; color: #ff6b6b; text-align: right; }
+.cat-res.ok { color: #3ddc84; }
+.cat-res small { font-weight: 600; color: var(--muted); }
+.cat-progress { text-align: center; font-weight: 800; color: var(--muted); padding: 6px; }
+.cat-progress.done { color: #3ddc84; font-size: 20px; }
+.tech-badge, .lyr-head .muted { white-space: nowrap; }

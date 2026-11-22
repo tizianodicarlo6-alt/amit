@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test src/lib/*.test.js src/features/studio/*.test.js src/features/bozza/*.test.js"
+    "test": "node --test src/lib/*.test.js src/features/studio/*.test.js src/features/bozza/*.test.js src/features/ispirazione/*.test.js"
   },
   "dependencies": {
     "@fontsource-variable/oswald": "^5.3.0",

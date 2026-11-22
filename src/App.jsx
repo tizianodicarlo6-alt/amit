@@ -14,6 +14,7 @@ import SketchPage from './features/bozza/SketchPage.jsx';
 import MessaggiPage from './features/messaggi/MessaggiPage.jsx';
 import ParliamonePage from './features/ispirazione/ParliamonePage.jsx';
 import NananaPage from './features/nanana/NananaPage.jsx';
+import CatenaPage from './features/ispirazione/CatenaPage.jsx';
 import NananaBall from './features/nanana/NananaBall.jsx';
 import { useEffect } from 'react';
 import { useProfile } from './lib/profile.js';
@@ -51,6 +52,7 @@ export default function App() {
               <Route path="/messaggi" element={<MessaggiPage />} />
               <Route path="/parliamone" element={<ParliamonePage />} />
               <Route path="/nanana" element={<NananaPage />} />
+              <Route path="/allenamento/catena" element={<CatenaPage />} />
               {/* Prossimamente: /allenamento */}
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>

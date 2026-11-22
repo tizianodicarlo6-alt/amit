@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Sheet from '../../components/Sheet.jsx';
 import Icon from '../../components/Icon.jsx';
 import AudioPlayer from '../../components/AudioPlayer.jsx';
@@ -6,7 +6,6 @@ import { useDbQuery } from '../../db/useDbQuery.js';
 import { addTrack, db, updateTrack } from '../../db/db.js';
 import { formatDate } from '../../constants.js';
 import { makeGrid } from '../../lib/loopRegion.js';
-import { loadIndex, loadRank, suggest } from '../../lib/rimario.js';
 import { sfidaDelGiorno } from '../../lib/sfide.js';
 import { useNavigate } from 'react-router-dom';
 
@@ -103,60 +102,6 @@ function Flash({ write }) {
   );
 }
 
-/** 4 · Catena di rime: una parola e i suoi suoni. */
-function Catena({ write }) {
-  const [data, setData] = useState(null);
-  const [err, setErr] = useState('');
-  const [n, setN] = useState(0);
-  useEffect(() => {
-    let alive = true;
-    Promise.all([loadIndex(), loadRank()])
-      .then(([index, rank]) => {
-        const words = [...rank.keys()].slice(300, 6000).filter((w) => w.length >= 5);
-        for (let k = 0; k < 40; k++) {
-          const w = pick(words);
-          const r = suggest(index, w, '', 14);
-          if (r.rime.length >= 5) return alive && setData({ w, r });
-        }
-      })
-      .catch(() => alive && setErr('Il rimario si scarica la prima volta con internet.'));
-    return () => {
-      alive = false;
-    };
-  }, [n]);
-  if (err) return <p className="error small">{err}</p>;
-  if (!data) return <span className="spinner" />;
-  return (
-    <div className="stack">
-      <div className="catena-w">{data.w}</div>
-      <div className="chips">
-        {data.r.rime.slice(0, 12).map((x) => (
-          <span key={x} className="chip sm static">
-            {x}
-          </span>
-        ))}
-      </div>
-      {data.r.multi.length > 0 && (
-        <div className="chips">
-          {data.r.multi.slice(0, 8).map((x) => (
-            <span key={x} className="chip sm static ghosty">
-              {x}
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="row">
-        <button className="btn primary grow" onClick={() => write({ text: `${data.w}\n` })}>
-          Parti da qui
-        </button>
-        <button className="btn" onClick={() => (setData(null), setN(n + 1))}>
-          Un'altra
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // La sfera "Ispirazione": quattro modi per accenderti, ordinati
 export default function InspirationSheet({ onClose, openCapture }) {
   const [view, setView] = useState('menu');
@@ -172,9 +117,9 @@ export default function InspirationSheet({ onClose, openCapture }) {
               ['ritorno', '↺', 'Idee che ritornano', 'Una tua vecchia nota o un vocale'],
               ['sfida', '◎', 'Sfida del giorno', 'Una sola sfida, cambia ogni giorno'],
               ['flash', '⏱', 'Sessione flash', 'Beat a caso, loop e timer'],
-              ['catena', '∞', 'Catena di rime', 'Una parola e i suoi suoni'],
+              ['catena', '∞', 'Catena di rime', 'Una parola, una o due quartine'],
             ].map(([k, ico, t, d]) => (
-              <button key={k} className="insp-tile" onClick={() => setView(k)}>
+              <button key={k} className="insp-tile" onClick={() => (k === 'catena' ? (onClose(), navigate('/allenamento/catena')) : setView(k))}>
                 <span className="insp-sym">{ico}</span>
                 <b>{t}</b>
                 <span className="muted small">{d}</span>
@@ -194,7 +139,6 @@ export default function InspirationSheet({ onClose, openCapture }) {
       {view === 'ritorno' && <Ritorno onOpen={(i) => (onClose(), navigate(`/taccuino?apri=${i.id}`))} />}
       {view === 'sfida' && <Sfida write={write} />}
       {view === 'flash' && <Flash write={write} />}
-      {view === 'catena' && <Catena write={write} />}
       {view !== 'menu' && (
         <button className="btn ghost insp-back" onClick={() => setView('menu')}>
           Indietro
