@@ -57,7 +57,7 @@ const HANDLE = 22; // px: quanto vicino al bordo per allargare
  * marks: zone già salvate per le altre sezioni [{ id, label, from, to, active }].
  */
 export default function BeatLoop({ beat, region, onRegion, marks = [], caption, attack: knownAttack = null, overlay = null, children, pauseSignal = 0 }) {
-  const [fixing, setFixing] = useState(false); // correggo la mappa a mano
+  const [fixing, setFixing] = useState(false); // sto dando un nome al pezzo scelto
   const [decoded, setDecoded] = useState(null);
   const [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -263,9 +263,11 @@ export default function BeatLoop({ beat, region, onRegion, marks = [], caption, 
   };
 
   const pct = (t) => `${(t / (duration || 1)) * 100}%`;
+  useEffect(() => setFixing(false), [region?.from, region?.to]);
   const fixMap = (kind) => {
     if (!region) return;
-    updateBeat(beat.id, { map: assignRange(beat.map, region.from, Math.min(region.to, duration), kind, (4 * 60) / beat.bpm), mapEdited: true });
+    updateBeat(beat.id, { map: assignRange(beat.map || [], region.from, Math.min(region.to, duration), kind, (4 * 60) / beat.bpm), mapEdited: true });
+    setFixing(false);
   };
   const bars = grid.barDur ? Math.floor((duration - grid.anchor) / grid.barDur) : 0;
 
@@ -295,33 +297,34 @@ export default function BeatLoop({ beat, region, onRegion, marks = [], caption, 
                   className={`bl-sec k-${m.kind}${region && Math.abs(region.from - m.start) < 0.05 && Math.abs(region.to - m.end) < 0.05 ? ' on' : ''}`}
                   style={{ left: pct(m.start), width: pct(m.end - m.start) }}
                   onClick={() => onRegion({ from: m.start, to: Math.min(m.end, duration) })}
-                  title={fixing ? `Correggi ${m.label}` : `Loop su ${m.label}`}
+                  title={`Loop su ${m.label}`}
                 >
                   {m.label}
                 </button>
               ))}
             </div>
-            <button className={`bl-fix${fixing ? ' on' : ''}`} onClick={() => setFixing(!fixing)} aria-label="Correggi la mappa">
-              {fixing ? 'Fine' : 'Correggi'}
-            </button>
           </div>
-          {fixing && (
-            <div className="bl-fixbar">
-              {!region ? (
-                <span className="muted small">Trascina il dito sul beat per scegliere un pezzo (o tocca un pezzo della mappa), poi dimmi cos'è.</span>
-              ) : (
-                <>
-                  <span className="small bl-fixq">{regionLabel(region, grid)} è:</span>
-                  {MAP_KINDS.map((k) => (
-                    <button key={k} className="chip sm" onClick={() => fixMap(k)}>
-                      {mapKindName(k)}
-                    </button>
-                  ))}
-                </>
-              )}
-            </div>
-          )}
         </>
+      )}
+      {region && beat.bpm && (
+        <div className="bl-fixbar">
+          {!fixing ? (
+            <button className="bl-name" onClick={() => setFixing(true)}>
+              🏷 Questo pezzo è…
+            </button>
+          ) : (
+            <>
+              {MAP_KINDS.map((k) => (
+                <button key={k} className="chip sm" onClick={() => fixMap(k)}>
+                  {mapKindName(k)}
+                </button>
+              ))}
+              <button className="chip sm ghosty" onClick={() => setFixing(false)}>
+                Annulla
+              </button>
+            </>
+          )}
+        </div>
       )}
       <div className="bl-marks">
         {marks
