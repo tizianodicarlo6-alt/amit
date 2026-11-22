@@ -8,6 +8,9 @@ import TrackPicker from '../../components/TrackPicker.jsx';
 import BeatLoop from '../../components/BeatLoop.jsx';
 import RhymeSheet from '../../components/RhymeSheet.jsx';
 import { wordAt } from '../../lib/rimario.js';
+import ShareSheet from '../messaggi/ShareSheet.jsx';
+import { useProfile } from '../../lib/profile.js';
+
 import { useDbQuery } from '../../db/useDbQuery.js';
 import { addIdea, addTrack, db, deleteIdea, updateIdea } from '../../db/db.js';
 
@@ -27,6 +30,8 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
   const [loop, setLoop] = useState(idea?.loop || null);
   const [sheet, setSheet] = useState(null); // 'info' | 'beat'
   const [rimario, setRimario] = useState(null);
+  const [sharing, setSharing] = useState(false);
+  const profile = useProfile();
   const caret = useRef(0);
   const [created] = useState(idea?.createdAt || Date.now());
   const navigate = useNavigate();
@@ -125,6 +130,7 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
         <textarea ref={taRef} className="note-text" value={text} onChange={(e) => setText(e.target.value)} onSelect={(e) => (caret.current = e.target.selectionStart)} placeholder="Scrivi la barra, il concetto, l'immagine…" autoCapitalize="sentences" />
       </div>
 
+      {sharing && <ShareSheet kind="idea" item={{ type: 'text', text, tags }} onClose={() => setSharing(false)} />}
       {rimario && <RhymeSheet word={rimario.word} prev={rimario.prev} onClose={() => setRimario(null)} />}
       {sheet === 'beat' && (
         <Sheet open onClose={() => setSheet(null)} title="Scrivi su un beat">
@@ -159,6 +165,11 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
             {!trackId && text.trim() && (
               <button className="btn ghost" onClick={toTrack}>
                 <Icon name="tracce" size={20} /> Crea una traccia da questa nota
+              </button>
+            )}
+            {profile && text.trim() && (
+              <button className="btn" onClick={() => (saveNow(), setSheet(null), setSharing(true))}>
+                <Icon name="send" size={20} /> Manda a un socio
               </button>
             )}
             <button className="btn danger" onClick={remove}>

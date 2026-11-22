@@ -11,6 +11,19 @@ import HomePage from './features/home/HomePage.jsx';
 import BeatPage from './features/beat/BeatPage.jsx';
 import StudioPage from './features/studio/StudioPage.jsx';
 import SketchPage from './features/bozza/SketchPage.jsx';
+import MessaggiPage from './features/messaggi/MessaggiPage.jsx';
+import { useEffect } from 'react';
+import { useProfile } from './lib/profile.js';
+import { startCloud } from './lib/cloud.js';
+
+// per i soci: messaggi in arrivo anche quando non sei nella pagina messaggi
+function CloudBoot() {
+  const profile = useProfile();
+  useEffect(() => {
+    if (profile) startCloud();
+  }, [profile]);
+  return null;
+}
 import ErrorBoundary, { ErrorToast } from './components/ErrorBoundary.jsx';
 
 // HashRouter (indirizzi con #) funziona senza configurazioni su GitHub Pages.
@@ -32,12 +45,14 @@ export default function App() {
               <Route path="/beat" element={<BeatPage />} />
               <Route path="/studio/:id" element={<StudioPage />} />
               <Route path="/bozza/:id" element={<SketchPage />} />
+              <Route path="/messaggi" element={<MessaggiPage />} />
               {/* Prossimamente: /allenamento */}
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>
           </ErrorBoundary>
         </main>
         <BottomNav />
+        <CloudBoot />
         <ErrorToast />
       </CaptureProvider>
     </HashRouter>

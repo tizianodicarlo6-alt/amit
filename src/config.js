@@ -14,3 +14,15 @@ export const bookingLink = (title, bpm) =>
   whatsappLink(
     `Ciao ${STUDIO.name}! Ho fatto il provino di "${title || 'un mio pezzo'}"${bpm ? ` (${bpm} BPM)` : ''} sull'app e mi convince. Vorrei registrarlo da voi, con mix e master.`
   );
+
+// Il "postino" online dei soci (Supabase). Indirizzo e chiave pubblica: stanno nell'app,
+// i dati sono protetti dalle regole del database (solo i soci leggono i loro messaggi).
+export const CLOUD = {
+  url: 'https://ldrcytilqvzssmdbolka.supabase.co',
+  key: 'sb_publishable_FVSrubLoIcnVBZo5kudS4w_hCuT6W1F',
+  domain: 'amit-studio.app',
+  members: [
+    { id: 'kraken', name: 'Kraken' },
+    { id: 'shower', name: 'Shower' },
+  ],
+};

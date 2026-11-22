@@ -43,3 +43,7 @@ create policy "i soci leggono i file" on storage.objects for select to authentic
 
 -- messaggi in arrivo in tempo reale
 alter publication supabase_realtime add table public.messages;
+
+-- permessi per gli utenti che hanno fatto l'accesso (le regole sopra decidono COSA vede ognuno)
+grant select, insert, update, delete on public.messages to authenticated;
+grant execute on function public.member_id() to authenticated;

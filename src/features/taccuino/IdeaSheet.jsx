@@ -8,6 +8,9 @@ import AudioPlayer from '../../components/AudioPlayer.jsx';
 import { addTrack, deleteIdea, updateIdea } from '../../db/db.js';
 import { formatDate } from '../../constants.js';
 import NoteEditor from './NoteEditor.jsx';
+import ShareSheet from '../messaggi/ShareSheet.jsx';
+import { useProfile } from '../../lib/profile.js';
+
 
 // Modifica di un'idea esistente.
 export default function IdeaSheet({ idea, onClose }) {
@@ -16,6 +19,8 @@ export default function IdeaSheet({ idea, onClose }) {
 }
 
 function VoiceIdeaSheet({ idea, onClose }) {
+  const profile = useProfile();
+  const [sharing, setSharing] = useState(false);
   const [text, setText] = useState(idea.text || '');
   const [tags, setTags] = useState(idea.tags || []);
   const [trackId, setTrackId] = useState(idea.trackId || null);
@@ -63,6 +68,12 @@ function VoiceIdeaSheet({ idea, onClose }) {
             <Icon name="tracce" size={20} /> Crea una traccia da questa idea
           </button>
         )}
+        {profile && (
+          <button className="btn" onClick={() => setSharing(true)}>
+            <Icon name="send" size={20} /> Manda a un socio
+          </button>
+        )}
+        {sharing && <ShareSheet kind="idea" item={{ ...idea, text, tags }} onClose={() => setSharing(false)} />}
         <button className="btn primary big" onClick={save}>
           <Icon name="check" /> Salva
         </button>

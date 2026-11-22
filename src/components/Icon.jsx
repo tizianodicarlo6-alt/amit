@@ -27,6 +27,8 @@ const PATHS = {
   share: 'M12 15V3M7 8l5-5 5 5M5 13v7h14v-7',
   beat: 'M3 12h3l3-7 4 14 3-7h5',
   studio: 'M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4',
+  chat: 'M4 5h16v11H9l-5 4zM8 9h8M8 12h5',
+  send: 'M4 12l16-8-6 16-3-7z',
   allenamento: 'M13 3L5 14h6l-1 7 8-11h-6z',
 };
 

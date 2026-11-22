@@ -15,6 +15,7 @@ import MelodyBar, { melodyOf, selectedTake } from '../editor/MelodyBar.jsx';
 import { SpuntoCard, VibePicker, spuntoText } from '../../components/Vibe.jsx';
 import { atmoOf, vibeLabel } from '../../lib/spunti.js';
 import { useProfile } from '../../lib/profile.js';
+import ShareSheet from '../messaggi/ShareSheet.jsx';
 import IdeaCard from '../taccuino/IdeaCard.jsx';
 import IdeaSheet from '../taccuino/IdeaSheet.jsx';
 import BeatStep from './BeatStep.jsx';
@@ -313,6 +314,8 @@ export default function TracciaPage() {
   const takeCount = useDbQuery(() => db.takes.where('trackId').equals(id).count(), [id], 0) || 0;
   const [stepPick, setStep] = useState(null);
   const [info, setInfo] = useState(null); // menu ⋯: 'dettagli' | 'idee' | 'registrazioni'
+  const [sharing, setSharing] = useState(false);
+  const profile = useProfile();
   const project = useMemo(() => projects.find((p) => p.id === track?.projectId), [projects, track]);
   // il passo iniziale si decide una volta sola (poi cambia solo quando lo scegli tu)
   useEffect(() => {
@@ -358,6 +361,7 @@ export default function TracciaPage() {
         </div>
       )}
 
+      {sharing && <ShareSheet kind="track" item={track} onClose={() => setSharing(false)} />}
       {info && (
         <Sheet open onClose={() => setInfo(null)} title={track.title || 'Traccia'}>
           <div className="tabs">
@@ -374,6 +378,11 @@ export default function TracciaPage() {
           {info === 'dettagli' && (
             <>
               <TrackDetails key={track.id} track={track} projects={projects} />
+              {profile && (
+                <button className="btn" onClick={() => (setInfo(null), setSharing(true))}>
+                  <Icon name="send" size={20} /> Manda a un socio
+                </button>
+              )}
               <button className="btn danger" onClick={remove}>
                 <Icon name="trash" size={20} /> Elimina traccia
               </button>

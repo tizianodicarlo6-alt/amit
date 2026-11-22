@@ -12,6 +12,7 @@ import { SpuntoCard, VibePicker, spuntoText } from '../../components/Vibe.jsx';
 import { vibeLabel } from '../../lib/spunti.js';
 import { addIdea } from '../../db/db.js';
 import { startTrack } from '../ispirazione/InspirationSheet.jsx';
+import { useCloud } from '../../lib/cloud.js';
 
 // Home dei soci: saluto personale e "che pezzo vuoi scrivere?"
 function MemberHero({ profile }) {
@@ -79,6 +80,7 @@ function SectionHead({ title, to }) {
 export default function HomePage() {
   const navigate = useNavigate();
   const profile = useProfile();
+  const cloud = useCloud();
   const { openCapture } = useCapture();
   const tracks = useDbQuery(() => db.tracks.orderBy('updatedAt').reverse().toArray(), [], []) || [];
   const ideas = useDbQuery(() => db.ideas.orderBy('createdAt').reverse().limit(3).toArray(), [], []) || [];
@@ -98,6 +100,12 @@ export default function HomePage() {
     <div className="page home">
       <header className="home-top">
         <span className="wordmark">{STUDIO.name}</span>
+        {profile && (
+          <Link to="/messaggi" className="icon-btn msg-btn" aria-label={`Messaggi${cloud.unread ? `, ${cloud.unread} nuovi` : ''}`}>
+            <Icon name="chat" />
+            {cloud.unread > 0 && <span className="badge">{cloud.unread}</span>}
+          </Link>
+        )}
         <Link to="/altro" className="icon-btn" aria-label="Impostazioni e backup">
           <Icon name="gear" />
         </Link>

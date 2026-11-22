@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import ShareSheet from '../messaggi/ShareSheet.jsx';
+import { useProfile } from '../../lib/profile.js';
 import { useDbQuery } from '../../db/useDbQuery.js';
 import { addTrack, db, deleteBeat, updateBeat, updateTrack } from '../../db/db.js';
 import { analyzeAudio } from '../../lib/audio.js';
@@ -96,6 +98,8 @@ export default function BeatSheet({ beatId, onClose }) {
   const beat = useDbQuery(() => db.beats.get(beatId).then((b) => b ?? null), [beatId], undefined);
   const tracks = useDbQuery(() => db.tracks.filter((t) => t.beatId === beatId).toArray(), [beatId], []) || [];
   const navigate = useNavigate();
+  const profile = useProfile();
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
     if (beat === null) onClose(); // beat eliminato
@@ -142,6 +146,12 @@ export default function BeatSheet({ beatId, onClose }) {
           </div>
         )}
         <BeatForm key={beat.id} beat={beat} />
+        {profile && (
+          <button className="btn" onClick={() => setSharing(true)}>
+            <Icon name="send" size={20} /> Manda a un socio
+          </button>
+        )}
+        {sharing && <ShareSheet kind="beat" item={beat} onClose={() => setSharing(false)} />}
         <button className="btn danger" onClick={remove}>
           <Icon name="trash" size={20} /> Elimina beat
         </button>
