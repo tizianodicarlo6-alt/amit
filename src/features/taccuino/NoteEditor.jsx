@@ -9,6 +9,7 @@ import BeatLoop from '../../components/BeatLoop.jsx';
 import RhymeSheet from '../../components/RhymeSheet.jsx';
 import { loadRank, wordAt } from '../../lib/rimario.js';
 import { quartine } from '../../lib/fuoco.js';
+import GhostBar, { insertGhostLine, useGhost } from '../../components/GhostBar.jsx';
 
 /** Il fuoco: una barra verticale con 4 tacche; dopo ogni quartina il fuoco sale fin dove è arrivata (1-4). */
 function FireBar({ level, count }) {
@@ -96,8 +97,11 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
   // quartine finite: il fuoco mostra l'ultima
   const quarts = useMemo(() => (profile ? quartine(text, { rank }) : []), [text, rank, profile]);
   const lastQ = quarts[quarts.length - 1];
-
   const caret = useRef(0);
+  // 👻 bloccato da ~3 minuti sulla stessa riga: una tua vecchia barra
+  const caretLine = text.slice(0, caret.current || text.length).split('\n').length - 1;
+  const ghost = useGhost({ lines: text.split('\n'), at: caretLine, exclude: id });
+
   const [created] = useState(idea?.createdAt || Date.now());
   const navigate = useNavigate();
   const beats = useDbQuery(() => db.beats.orderBy('createdAt').reverse().toArray(), [], []) || [];
@@ -209,6 +213,16 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
       </div>
 
       {sharing && <ShareSheet kind="idea" item={{ type: 'text', text, tags }} onClose={() => setSharing(false)} />}
+      <GhostBar
+        ghost={ghost.ghost}
+        count={ghost.count}
+        onNext={ghost.next}
+        onClose={ghost.dismiss}
+        onUse={(g) => {
+          setText((t) => insertGhostLine(t, caretLine, g));
+          ghost.dismiss();
+        }}
+      />
       {rimario && <RhymeSheet word={rimario.word} prev={rimario.prev} onClose={() => setRimario(null)} />}
       {sheet === 'beat' && (
         <Sheet open onClose={() => setSheet(null)} title="Scrivi su un beat">

@@ -761,3 +761,10 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .bmap.k-rit { background: #ffd23f; } .bmap.k-strofa { background: #4c9aff; } .bmap.k-intro, .bmap.k-outro { background: #8a8a94; } .bmap.k-break { background: #b26cf5; }
 .steps.two .step-n { font-size: 12px; }
 .beat-change { display: block; margin: -4px 0 6px auto; border: 0; background: none; color: var(--muted); font-size: 12px; text-decoration: underline; padding: 2px 0; }
+
+/* 👻 Barra fantasma */
+.ghost-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--safe-b) + 18px); z-index: 48; width: min(92vw, 520px); padding: 12px 14px; border-radius: 16px; background: rgba(28, 28, 34, 0.82); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid #ffffff22; box-shadow: 0 10px 40px rgba(0, 0, 0, .6); animation: ghostin .5s ease-out; }
+.ghost-kicker { font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 4px; }
+.ghost-text { font-size: 18px; font-style: italic; color: rgba(255, 255, 255, .62); line-height: 1.4; }
+.ghost-actions { display: flex; gap: 6px; margin-top: 10px; }
+@keyframes ghostin { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }

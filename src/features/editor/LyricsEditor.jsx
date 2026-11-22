@@ -5,6 +5,7 @@ import { SECTION_TYPES, RHYME_COLORS, sectionLabel } from '../../constants.js';
 import { analyzeRhymes, countLineSyllables, multiColors, multiKeys, tokenizeLine } from '../../lib/italiano.js';
 import { wordAt } from '../../lib/rimario.js';
 import RhymeSheet from '../../components/RhymeSheet.jsx';
+import GhostBar, { insertGhostLine, useGhost } from '../../components/GhostBar.jsx';
 import { useAutosave, SaveStatus } from '../../components/useAutosave.jsx';
 import Icon from '../../components/Icon.jsx';
 
@@ -150,6 +151,11 @@ export default function LyricsEditor({ track, onFocusSection, activeId, targets 
   const caret = useRef({ text: '', pos: 0 });
   const [rimario, setRimario] = useState(null);
   const openRimario = () => setRimario(wordAt(caret.current.text, caret.current.pos));
+  // 👻 barra fantasma: fermo da ~3 minuti nella sezione dove stai scrivendo
+  const [focusId, setFocusId] = useState(null);
+  const focusSec = sections.find((x) => x.id === focusId) || null;
+  const ghostAt = focusSec ? caret.current.text.slice(0, caret.current.pos).split('\n').length - 1 : 0;
+  const ghost = useGhost({ lines: focusSec ? focusSec.text.split('\n') : [], at: ghostAt, exclude: track.id, enabled: !!focusSec });
 
   const update = (id, changes) => setSections((list) => list.map((s) => (s.id === id ? { ...s, ...changes } : s)));
   const add = (type) => setSections((list) => [...list, newSection(type)]);
@@ -193,6 +199,16 @@ export default function LyricsEditor({ track, onFocusSection, activeId, targets 
         <SaveStatus status={status} />
       </div>
       {rimario && <RhymeSheet word={rimario.word} prev={rimario.prev} onClose={() => setRimario(null)} />}
+      <GhostBar
+        ghost={ghost.ghost}
+        count={ghost.count}
+        onNext={ghost.next}
+        onClose={ghost.dismiss}
+        onUse={(g) => {
+          if (focusSec) update(focusSec.id, { text: insertGhostLine(focusSec.text, ghostAt, g) });
+          ghost.dismiss();
+        }}
+      />
       {mode === 'multi' && (
         <div className="rhyme-legend muted small">
           <span>
@@ -239,7 +255,7 @@ export default function LyricsEditor({ track, onFocusSection, activeId, targets 
                 <Icon name="trash" size={18} />
               </button>
             </div>
-            <SectionText targets={targets[s.id]} onCaret={(text, pos) => (caret.current = { text, pos })} onFocus={() => onFocusSection?.(s.id)} text={s.text} onChange={(text) => update(s.id, { text })} analysis={analysis} showRhymes={showRhymes} showSyllables={showSyllables} />
+            <SectionText targets={targets[s.id]} onCaret={(text, pos) => (caret.current = { text, pos })} onFocus={() => (setFocusId(s.id), onFocusSection?.(s.id))} text={s.text} onChange={(text) => update(s.id, { text })} analysis={analysis} showRhymes={showRhymes} showSyllables={showSyllables} />
           </section>
         );
       })}
