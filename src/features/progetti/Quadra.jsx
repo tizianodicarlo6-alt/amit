@@ -1,7 +1,5 @@
 import { CLOUD } from '../../config.js';
 import { useState } from 'react';
-import { updateTrack } from '../../db/db.js';
-import { sectionLabel } from '../../constants.js';
 import { callFunction, useCloud } from '../../lib/cloud.js';
 
 // Strade concrete per andare avanti dopo l'attacco (quando arriva "e mo' che dico?")
@@ -16,10 +14,13 @@ export const STRADE = [
   { id: 'promessa', label: 'La promessa', q: () => 'Cosa prometti a te stesso, o a chi ti ascolta?' },
 ];
 
-/** Tema, concetto del ritornello, direzione di ogni strofa: la "quadra" della traccia. */
-export default function Quadra({ track, activeId }) {
-  const q = track.quadra || {};
-  const [open, setOpen] = useState(!q.tema);
+/**
+ * La "quadra" del pezzo: tema, concetto del ritornello, direzione di ogni strofa.
+ * value/onChange: { tema, rit, dir: { [chiave strofa]: testo } }
+ * strofe: [{ key, label, text }] le strofe del testo (per la direzione di ognuna)
+ */
+export default function Quadra({ value, onChange, strofe = [], activeKey = null, onClose }) {
+  const q = value || {};
   const cloudState = useCloud();
   const [ai, setAi] = useState(null); // { busy } | { strade } | { error }
   const askAi = async (s) => {
@@ -31,38 +32,21 @@ export default function Quadra({ track, activeId }) {
       setAi({ error: e.message || 'Assistente non disponibile.' });
     }
   };
-  const set = (c) => updateTrack(track.id, { quadra: { ...q, ...c } });
-  const setDir = (id, v) => set({ dir: { ...(q.dir || {}), [id]: v } });
-  const strofe = (track.sections || []).filter((s) => s.type !== 'ritornello');
-  const totals = {};
-  const seen = {};
-  for (const s of track.sections || []) totals[s.type] = (totals[s.type] || 0) + 1;
-  const labelOf = (s) => {
-    seen[s.type] = (seen[s.type] || 0) + 1;
-    return `${sectionLabel(s.type)}${totals[s.type] > 1 ? ` ${seen[s.type]}` : ''}`;
-  };
-  const labels = Object.fromEntries((track.sections || []).map((s) => [s.id, labelOf(s)]));
+  const set = (c) => onChange({ ...q, ...c });
+  const setDir = (k, v) => set({ dir: { ...(q.dir || {}), [k]: v } });
   const lines = (s) => s.text.split('\n').filter((l) => l.trim()).length;
-  // la strofa su cui sei, se hai già l'attacco ma la direzione è vuota: ti propongo le strade
-  const act = strofe.find((s) => s.id === activeId);
-  const needWay = act && lines(act) >= 2 && !(q.dir || {})[act.id];
-
-  if (!open)
-    return (
-      <button className="quadra-mini" onClick={() => setOpen(true)}>
-        <span className="qm-k">Quadra</span>
-        <span className="grow ellipsis">{q.tema || 'Di cosa parla il pezzo? Tocca per scriverlo'}</span>
-        {needWay && <span className="qm-dot" title="Scegli dove va la strofa" />}
-      </button>
-    );
+  // la strofa su cui sei (o l'ultima) con l'attacco scritto: ti propongo le strade
+  const act = strofe.find((s) => s.key === activeKey) || strofe[strofe.length - 1];
 
   return (
     <div className="quadra">
       <div className="row between">
-        <span className="field-label">La quadra della traccia</span>
-        <button className="btn sm ghost" onClick={() => setOpen(false)}>
-          Chiudi
-        </button>
+        <span className="field-label">La quadra del pezzo</span>
+        {onClose && (
+          <button className="btn sm ghost" onClick={onClose}>
+            Nascondi
+          </button>
+        )}
       </div>
       <label className="qd-field">
         <span>Tema</span>
@@ -73,21 +57,21 @@ export default function Quadra({ track, activeId }) {
         <input className="input" defaultValue={q.rit || ''} onBlur={(e) => set({ rit: e.target.value.trim() })} placeholder="Il concetto che torna (non il testo)" />
       </label>
       {strofe.map((s) => (
-        <div key={s.id} className={`qd-field${s.id === activeId ? ' on' : ''}`}>
-          <span>{labels[s.id]}</span>
+        <div key={s.key} className={`qd-field${act && s.key === act.key ? ' on' : ''}`}>
+          <span>{s.label}</span>
           <input
-            key={(q.dir || {})[s.id] || ''}
+            key={(q.dir || {})[s.key] || ''}
             className="input"
-            defaultValue={(q.dir || {})[s.id] || ''}
-            onBlur={(e) => setDir(s.id, e.target.value.trim())}
+            defaultValue={(q.dir || {})[s.key] || ''}
+            onBlur={(e) => setDir(s.key, e.target.value.trim())}
             placeholder="Dove va: cosa dici qui"
           />
-          {s.id === activeId && lines(s) >= 2 && (
+          {act && s.key === act.key && lines(s) >= 2 && !(q.dir || {})[s.key] && (
             <div className="strade">
               <span className="muted small">Hai l'attacco. Dove la porti?</span>
               <div className="chips">
                 {STRADE.map((st) => (
-                  <button key={st.id} className="chip sm" onClick={() => setDir(s.id, `${st.label}: ${st.q(q.tema)}`)}>
+                  <button key={st.id} className="chip sm" onClick={() => setDir(s.key, `${st.label}: ${st.q(q.tema)}`)}>
                     {st.label}
                   </button>
                 ))}
@@ -99,7 +83,7 @@ export default function Quadra({ track, activeId }) {
               )}
               {ai?.error && <p className="error small">{ai.error}</p>}
               {ai?.strade?.map((t) => (
-                <button key={t} className="strada-ai" onClick={() => (setDir(s.id, t), setAi(null))}>
+                <button key={t} className="strada-ai" onClick={() => (setDir(s.key, t), setAi(null))}>
                   {t}
                 </button>
               ))}

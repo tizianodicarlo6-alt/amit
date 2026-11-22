@@ -1,15 +1,15 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { updateTrack } from '../../db/db.js';
-import { SECTION_TYPES, RHYME_COLORS } from '../../constants.js';
+import { SECTION_TYPES, RHYME_COLORS, formatDate } from '../../constants.js';
 import { cleanSections, headerType, parseLyrics, sectionAtLine, sectionsToText } from '../../lib/sezioni.js';
 import { analyzeRhymes, countLineSyllables, multiColors, multiKeys, tokenizeLine } from '../../lib/italiano.js';
-import { wordAt } from '../../lib/rimario.js';
-import RhymeSheet from '../../components/RhymeSheet.jsx';
-import GhostBar, { insertGhostLine, useGhost } from '../../components/GhostBar.jsx';
-import { addBars, logEvent } from '../../lib/stats.js';
+import { addBars } from '../../lib/stats.js';
 import { useAutosave, SaveStatus } from '../../components/useAutosave.jsx';
 import Icon from '../../components/Icon.jsx';
+import Sheet from '../../components/Sheet.jsx';
+import { useDbQuery } from '../../db/useDbQuery.js';
+import { db } from '../../db/db.js';
 
 const readPref = (k, d) => {
   try {
@@ -158,9 +158,11 @@ const startText = (track) => {
  */
 export default function LyricsEditor({ track, onFocusSection, activeId, targets = {} }) {
   const [text, setText] = useState(() => startText(track));
-  const [mode, setMode] = useState(readMode);
-  const showRhymes = mode !== 'off';
-  const [showSyllables, setShowSyllables] = useState(() => readPref('q.sillabe', true));
+  // qui il testo arriva già scritto (dalle note) e serve allo studio: niente strumenti di scrittura
+  const mode = 'off';
+  const showRhymes = false;
+  const showSyllables = false;
+  const [picking, setPicking] = useState(false);
   const parsedRef = useRef(null);
   const parsed = useMemo(() => parseLyrics(text, parsedRef.current || track.sections || []), [text]); // eslint-disable-line react-hooks/exhaustive-deps
   parsedRef.current = parsed;
@@ -169,12 +171,7 @@ export default function LyricsEditor({ track, onFocusSection, activeId, targets 
 
   const lines = text.split('\n');
   const isHeader = useMemo(() => lines.map((l) => !!headerType(l)), [text]); // eslint-disable-line react-hooks/exhaustive-deps
-  // per le rime conto solo le barre (non i titoli)
-  const barsText = useMemo(() => lines.filter((l, i) => !isHeader[i]).join('\n'), [text]); // eslint-disable-line react-hooks/exhaustive-deps
-  const analysis = useMemo(
-    () => (mode === 'multi' ? { mode: 'multi', colors: multiColors(barsText, RHYME_COLORS.length), stats: {} } : analyzeRhymes(barsText, mode, RHYME_COLORS.length)),
-    [barsText, mode]
-  );
+  const analysis = useMemo(() => ({ mode, colors: new Map(), exact: new Set(), stats: {}, groupKey: () => null }), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [caretLine, setCaretLine] = useState(0);
   const caret = useRef({ text: '', pos: 0 });
   const totalBars = lines.filter((l, i) => l.trim() && !isHeader[i]).length;
@@ -183,8 +180,6 @@ export default function LyricsEditor({ track, onFocusSection, activeId, targets 
     if (totalBars > filledRef.current) addBars(totalBars - filledRef.current);
     filledRef.current = Math.max(filledRef.current, totalBars);
   }, [totalBars]);
-  const [rimario, setRimario] = useState(null);
-  const openRimario = () => setRimario(wordAt(caret.current.text, caret.current.pos));
 
   // in che sezione sto scrivendo (dal cursore)
   const onCaret = (value, pos) => {
@@ -213,8 +208,14 @@ export default function LyricsEditor({ track, onFocusSection, activeId, targets 
     }, 300);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 👻 barra fantasma: fermo da ~3 minuti
-  const ghost = useGhost({ lines, at: caretLine, exclude: track.id, enabled: true });
+  // il testo di una nota: se qui è vuoto lo metto e basta, altrimenti chiedo
+  const useNote = (t) => {
+    const clean = (t || '').trim();
+    if (!clean) return;
+    if (!text.trim()) return setText(clean);
+    if (confirm('Sostituire il testo che c\'è con quello della nota?\n\nOK = sostituisci · Annulla = aggiungilo in fondo')) setText(clean);
+    else setText(`${text.replace(/\s+$/, '')}\n\n${clean}`);
+  };
 
   // + Ritornello / + Strofa: scrive la riga-titolo dove sei
   const addHeader = (type) => {
@@ -265,45 +266,13 @@ export default function LyricsEditor({ track, onFocusSection, activeId, targets 
   return (
     <div className="editor">
       <div className="editor-bar">
-        <ModePicker value={mode} onChange={(v) => (setMode(v), writePref('q.rimeMode', v))} />
-        <Toggle on={showSyllables} onChange={(v) => (setShowSyllables(v), writePref('q.sillabe', v))} label="Sillabe" />
-        <button className="btn sm" onPointerDown={(e) => e.preventDefault()} onClick={openRimario}>
-          Rimario
+        <button className="btn sm" onClick={() => setPicking(true)}>
+          <Icon name="taccuino" size={18} /> Prendi da una nota
         </button>
         <span className="grow" />
         <SaveStatus status={status} />
       </div>
-      {rimario && <RhymeSheet word={rimario.word} prev={rimario.prev} onClose={() => setRimario(null)} />}
-      <GhostBar
-        ghost={ghost.ghost}
-        count={ghost.count}
-        onNext={ghost.next}
-        onClose={ghost.dismiss}
-        onUse={(g) => {
-          setText(insertGhostLine(text, caretLine, g));
-          logEvent('reuse');
-          ghost.dismiss();
-        }}
-      />
-      {mode === 'multi' && (
-        <div className="rhyme-legend muted small">
-          <span>
-            <span className="rhyme" style={{ '--rc': RHYME_COLORS[0] }}>multisillabiche</span> {analysis.colors.size} {analysis.colors.size === 1 ? 'gruppo' : 'gruppi'} · stesse vocali sulle ultime 3+ sillabe, anche dentro la riga
-          </span>
-        </div>
-      )}
-      {showRhymes && mode !== 'multi' && (
-        <div className="rhyme-legend muted small">
-          <span>
-            <span className="rhyme" style={{ '--rc': RHYME_COLORS[0] }}>rima</span> {analysis.stats.rime} {analysis.stats.rime === 1 ? 'gruppo' : 'gruppi'}
-          </span>
-          {mode === 'assonanze' && (
-            <span>
-              <span className="rhyme ass" style={{ '--rc': RHYME_COLORS[1] }}>assonanza</span> {analysis.stats.assonanze} {analysis.stats.assonanze === 1 ? 'gruppo' : 'gruppi'}
-            </span>
-          )}
-        </div>
-      )}
+      {picking && <NotePicker onClose={() => setPicking(false)} onPick={(t) => (useNote(t), setPicking(false))} />}
 
       <div className="lyr-sheet">
         <div className={`lyr${showSyllables ? ' with-syl' : ''}`}>
@@ -321,7 +290,7 @@ export default function LyricsEditor({ track, onFocusSection, activeId, targets 
             spellCheck={false}
             autoCorrect="off"
             autoCapitalize="sentences"
-            placeholder={'Scrivi qui le barre, una per riga.\n\nPer dividere il pezzo scrivi su una riga da sola “Ritornello” o “Strofa 2”, oppure usa i tasti qui sotto.'}
+            placeholder={'Incolla qui il testo (o prendilo da una nota col tasto sopra): è quello che vedrai scorrere mentre registri.\n\nSe vuoi che lo studio parta dal ritornello, scrivi su una riga da sola “Ritornello” (o usa i tasti sotto).'}
           />
         </div>
       </div>
@@ -343,5 +312,29 @@ export default function LyricsEditor({ track, onFocusSection, activeId, targets 
         </button>
       </div>
     </div>
+  );
+}
+
+/** Scegli una nota da cui prendere il testo. */
+function NotePicker({ onClose, onPick }) {
+  const notes = useDbQuery(() => db.ideas.orderBy('updatedAt').reverse().filter((i) => i.type === 'text' && !!(i.text || '').trim()).toArray(), [], []) || [];
+  return (
+    <Sheet open onClose={onClose} title="Prendi il testo da una nota">
+      <div className="list">
+        {notes.length === 0 && <p className="muted">Non hai ancora note con del testo.</p>}
+        {notes.map((n) => (
+          <button key={n.id} className="beat-pick note-pick" onClick={() => onPick(n.text)}>
+            <span className="grow min0">
+              <span className="ellipsis" style={{ display: 'block', fontWeight: 800 }}>
+                {n.title || n.text.trim().split('\n')[0]}
+              </span>
+              <span className="muted small ellipsis" style={{ display: 'block', fontWeight: 400 }}>
+                {n.text.trim().split('\n').filter((l) => l.trim()).length} righe · {formatDate(n.updatedAt || n.createdAt)}
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </Sheet>
   );
 }

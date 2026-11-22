@@ -13,6 +13,17 @@ import { setResume } from '../../lib/resume.js';
 import { addBars, logEvent } from '../../lib/stats.js';
 import GhostBar, { insertGhostLine, useGhost } from '../../components/GhostBar.jsx';
 import { Line, ModePicker, RhymeLegend, readMode, rhymeAnalysis } from '../editor/LyricsEditor.jsx';
+import Quadra from '../progetti/Quadra.jsx';
+import { parseLyrics } from '../../lib/sezioni.js';
+
+const QUADRA_KEY = 'amit.note.quadra';
+const readQuadra = () => {
+  try {
+    return localStorage.getItem(QUADRA_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
 
 const FIRE_KEY = 'amit.note.fuoco';
 const readFire = () => {
@@ -79,6 +90,17 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
   const [trackId, setTrackId] = useState(idea?.trackId ?? initialTrack);
   const [beatId, setBeatId] = useState(idea?.beatId || start?.beatId || null);
   const [loop, setLoop] = useState(idea?.loop || start?.loop || null);
+  // 🧭 la quadra del pezzo (si accende dal menu ···, per chi la vuole)
+  const [quadraOn, setQuadraOn] = useState(readQuadra);
+  const [quadra, setQuadra] = useState(idea?.quadra || null);
+  const toggleQuadra = (v) => {
+    setQuadraOn(v);
+    try {
+      localStorage.setItem(QUADRA_KEY, v ? '1' : '0');
+    } catch {
+      /* ignorato */
+    }
+  };
   // barre scritte oggi (per i contatori della prova)
   const filledNow = text.split('\n').filter((l) => l.trim()).length;
   const filledRef = useRef(filledNow);
@@ -155,7 +177,7 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
   const timer = useRef(0);
   const saving = useRef(Promise.resolve());
   const latest = useRef({});
-  latest.current = { text, title, tags, trackId, beatId, loop };
+  latest.current = { text, title, tags, trackId, beatId, loop, quadra };
   const idRef = useRef(id);
   idRef.current = id;
 
@@ -164,13 +186,13 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
     clearTimeout(timer.current);
     saving.current = saving.current.then(async () => {
       const v = latest.current;
-      const data = { text: v.text.trim() ? v.text : '', title: v.title.trim(), tags: v.tags, trackId: v.trackId, beatId: v.beatId, loop: v.loop };
+      const data = { text: v.text.trim() ? v.text : '', title: v.title.trim(), tags: v.tags, trackId: v.trackId, beatId: v.beatId, loop: v.loop, quadra: v.quadra };
       if (!idRef.current) {
         if (!v.text.trim() && !v.title.trim()) return;
         const nid = await addIdea({ type: 'text', text: data.text, tags: data.tags, trackId: data.trackId });
         idRef.current = nid;
         setId(nid);
-        await updateIdea(nid, { title: data.title, beatId: data.beatId, loop: data.loop });
+        await updateIdea(nid, { title: data.title, beatId: data.beatId, loop: data.loop, quadra: data.quadra });
       } else await updateIdea(idRef.current, data);
     });
     return saving.current;
@@ -178,7 +200,7 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
   useEffect(() => {
     clearTimeout(timer.current);
     timer.current = setTimeout(saveNow, 500);
-  }, [text, title, tags, trackId, beatId, loop]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [text, title, tags, trackId, beatId, loop, quadra]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     document.body.classList.add('no-scroll');
@@ -259,6 +281,17 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
             {trackId ? `${tags.length ? ' · ' : ''}🔗 collegata a una traccia` : ''}
           </button>
         )}
+        {quadraOn && (
+          <Quadra
+            value={quadra}
+            onChange={setQuadra}
+            strofe={(() => {
+              const list = parseLyrics(text).filter((x) => x.type === 'strofa');
+              return list.map((x, i) => ({ key: `strofa-${i + 1}`, label: list.length > 1 ? `Strofa ${i + 1}` : 'Strofa', text: x.text }));
+            })()}
+            onClose={() => toggleQuadra(false)}
+          />
+        )}
         <div className="note-rhymes">
           <ModePicker value={mode} onChange={changeMode} />
           {analysis && <RhymeLegend mode={mode} analysis={analysis} />}
@@ -324,6 +357,10 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
               <span className="field-label">Tag</span>
               <TagPicker value={tags} onChange={setTags} />
             </div>
+            <button className={`toggle${quadraOn ? ' on' : ''}`} onClick={() => toggleQuadra(!quadraOn)} role="switch" aria-checked={quadraOn}>
+              <span className="toggle-knob" />
+              Quadra del pezzo (tema, ritornello, dove va ogni strofa)
+            </button>
             <TrackPicker value={trackId} onChange={setTrackId} />
             {!trackId && text.trim() && (
               <button className="btn ghost" onClick={toTrack}>

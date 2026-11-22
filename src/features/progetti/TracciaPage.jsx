@@ -12,13 +12,11 @@ import { useAutosave, SaveStatus } from '../../components/useAutosave.jsx';
 import { useCapture } from '../../components/CaptureContext.jsx';
 import LyricsEditor from '../editor/LyricsEditor.jsx';
 import BeatLoop from '../../components/BeatLoop.jsx';
-import MelodyBar, { melodyOf, selectedTake } from '../editor/MelodyBar.jsx';
 import { SpuntoCard, VibePicker, spuntoText } from '../../components/Vibe.jsx';
 import { atmoOf, vibeLabel } from '../../lib/spunti.js';
 import { useProfile } from '../../lib/profile.js';
 import ShareSheet from '../messaggi/ShareSheet.jsx';
 import ProvinoClose from './ProvinoClose.jsx';
-import Quadra from './Quadra.jsx';
 import { MapCard } from '../ispirazione/ParliamonePage.jsx';
 import IdeaCard from '../taccuino/IdeaCard.jsx';
 import IdeaSheet from '../taccuino/IdeaSheet.jsx';
@@ -269,8 +267,6 @@ function WriteOnBeat({ track }) {
   }, [active, track.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [free, setFree] = useState(null);
-  const [overlay, setOverlay] = useState(null);
-  const [pauseSig, setPauseSig] = useState(0);
   const st = track.studio || {};
   const loops = st.loops || {};
   const region = (active && loops[active]) || free;
@@ -297,15 +293,11 @@ function WriteOnBeat({ track }) {
     }
     updateTrack(track.id, { studio: { ...st, loops: nextLoops, starts } });
   };
-  // sillabe delle frasi del nanana → accanto alle righe della sezione che stai scrivendo
-  const mel = active ? selectedTake(melodyOf(track, active)) : null;
-  const targets = mel ? { [active]: mel.phrases.map((p) => p.syllables) } : {};
   const marks = Object.entries(loops)
     .filter(([id]) => labels[id])
     .map(([id, r]) => ({ id, label: labels[id], from: r.from, to: r.to, active: id === active }));
   return (
     <>
-      <Quadra track={track} activeId={active} />
       {beat && (
         <BeatLoop
           beat={beat}
@@ -314,13 +306,9 @@ function WriteOnBeat({ track }) {
           marks={marks}
           attack={st.attack ?? null}
           caption={active && labels[active] ? `Stai scrivendo: ${labels[active]}` : beat.title}
-          overlay={overlay}
-          pauseSignal={pauseSig}
-        >
-          <MelodyBar melody={melodyOf(track, active || '_')} onChange={(next) => updateTrack(track.id, { studio: { ...(track.studio || {}), melodies: { ...(track.studio?.melodies || {}), [active || '_']: next } } })} beat={beat} region={region} onOverlay={setOverlay} onPause={() => setPauseSig((n) => n + 1)} />
-        </BeatLoop>
+        />
       )}
-      <LyricsEditor key={track.id} track={track} activeId={active} onFocusSection={setActive} targets={targets} />
+      <LyricsEditor key={track.id} track={track} activeId={active} onFocusSection={setActive} />
     </>
   );
 }
