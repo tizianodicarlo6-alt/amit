@@ -203,19 +203,22 @@ function TrackIdeas({ track, onEditLyricsAfter }) {
 // I 3 passi del lavoro su una traccia
 function Steps({ step, setStep, track, takeCount, onStudio }) {
   const lines = (track.sections || []).reduce((n, s) => n + s.text.split('\n').filter((l) => l.trim()).length, 0);
+  // due passi: il testo (col beat) e lo studio (tutto in una schermata, come Logic)
   const items = [
-    { id: 'beat', n: 1, label: 'Beat', done: !!track.beatId },
-    { id: 'testo', n: 2, label: 'Testo', done: lines > 0 },
-    { id: 'studio', n: 3, label: 'Registra', done: takeCount > 0 },
+    { id: 'testo', label: 'Testo', done: lines > 0 },
+    { id: 'studio', label: 'Studio', done: takeCount > 0 },
   ];
   return (
-    <div className="steps">
-      {items.map((it) => (
-        <button key={it.id} className={`step${step === it.id ? ' on' : ''}${it.done ? ' done' : ''}`} onClick={() => (it.id === 'studio' ? onStudio() : setStep(it.id))}>
-          <span className="step-n">{it.done && step !== it.id ? '✓' : it.n}</span>
-          <span>{it.label}</span>
-        </button>
-      ))}
+    <div className="steps two">
+      {items.map((it) => {
+        const on = it.id === 'testo' ? step === 'testo' || step === 'beat' : false;
+        return (
+          <button key={it.id} className={`step${on ? ' on' : ''}${it.done ? ' done' : ''}`} onClick={() => (it.id === 'studio' ? onStudio() : setStep(track.beatId ? 'testo' : 'beat'))}>
+            <span className="step-n">{it.done && !on ? '✓' : it.id === 'testo' ? '✎' : '●'}</span>
+            <span>{it.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -360,11 +363,16 @@ export default function TracciaPage() {
       )}
 
       {step === 'beat' && <BeatStep track={track} onNext={() => setStep('testo')} />}
+      {step === 'testo' && track.beatId && (
+        <button className="beat-change" onClick={() => setStep('beat')}>
+          Cambia beat
+        </button>
+      )}
       {step === 'testo' && (
         <div className="wob">
           <WriteOnBeat track={track} />
           <button className="btn primary big" onClick={goStudio}>
-            <Icon name="mic" /> Avanti: registra →
+            <Icon name="mic" /> Vai in studio →
           </button>
         </div>
       )}

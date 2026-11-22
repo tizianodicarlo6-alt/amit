@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useDbQuery } from '../../db/useDbQuery.js';
-import { addTake, db, updateTake, updateTrack } from '../../db/db.js';
-import { ROLES, formatTime, keyShort, roleLabel } from '../../constants.js';
+import { addTake, db, updateBeat, updateTake, updateTrack } from '../../db/db.js';
+import { KEYS, ROLES, formatTime, keyShort, roleLabel } from '../../constants.js';
 import Icon from '../../components/Icon.jsx';
+import Sheet from '../../components/Sheet.jsx';
 import { usePref } from '../../components/usePref.js';
 import { micErrorMessage } from '../../components/useRecorder.js';
 import { detectAttack } from '../../lib/analysis.js';
@@ -51,7 +52,9 @@ export default function StudioPage() {
   const silentSince = useRef(0);
   const [selectedLine, setSelectedLine] = useState(null);
   const [sheet, setSheet] = useState(null); // 'settings' | 'structure'
-  const [view, setView] = useState('rec'); // 'rec' = Registra · 'mix' = Montaggio
+  const [view, setView] = useState('mix'); // 'mix' = lo Studio (tracce, come Logic) · 'rec' = il testo mentre registri
+  const [selCh, setSelCh] = useState('main'); // canale scelto (inspector)
+  const autoBackRef = useRef(false); // dopo una registrazione partita dal tasto Rec torno allo Studio
   const [solo, setSolo] = useState([]); // take in "solo" (si sentono solo quelle)
   const [editTick, setEditTick] = useState(0);
   const playFromRef = useRef(null);
@@ -92,6 +95,14 @@ export default function StudioPage() {
   const attackAuto = st.attack == null && st.introBars == null;
   const attack = st.attack ?? (st.introBars != null ? st.introBars * barDur : autoAttack);
   const setTrackStudio = (changes) => updateTrack(id, { studio: { ...st, fx, barsPerLine, ...changes } });
+  // canali (Voce, Doppie, Adlib): plug-in, volume e pan per canale, come in Logic
+  const channels = st.channels || {};
+  const chFx = (role) => normalizeStrip(channels[role]?.fx ?? st.fx);
+  const setChannel = (role, c) => {
+    setTrackStudio({ channels: { ...channels, [role]: { ...(channels[role] || {}), ...c } } });
+    setEditTick((x) => x + 1);
+  };
+  const fxCount = (role) => Object.values(chFx(role)).filter((x) => x.on).length;
 
   const timeline = useMemo(() => buildTimeline(track?.sections, { starts, attack, barDur, barsPerLine }), [track?.sections, starts, attack, barDur, barsPerLine]);
   // Partenza automatica: qualche secondo prima della prima sezione scritta
@@ -146,6 +157,13 @@ export default function StudioPage() {
   );
 
   useEffect(() => {
+    if (mode === 'idle' && autoBackRef.current) {
+      autoBackRef.current = false;
+      setView('mix');
+    }
+  }, [mode]);
+
+  useEffect(() => {
     if (!flash) return;
     const t = setTimeout(() => setFlash(''), 2200);
     return () => clearTimeout(t);
@@ -165,7 +183,10 @@ export default function StudioPage() {
     const list = only ? takes.filter((t) => only.includes(t.id)) : takes.filter((t) => t.included !== false);
     // buffer con l'eventuale pitch già applicato
     const withBuf = await Promise.all(list.map(async (t) => ({ ...t, buffer: engine.pitched(t.audioId, await loadTakeBuffer(t), t.pitch || 0) })));
-    return buildVoices(withBuf, { lat: latOverride, voiceGain: vGain, only });
+    return buildVoices(withBuf, { lat: latOverride, voiceGain: vGain, only }).map((v) => {
+      const c = channels[v.role] || {};
+      return { ...v, fx: chFx(v.role), gain: v.gain * dbToGain(c.db || 0), pan: c.pan ?? v.pan };
+    });
   };
 
   const stopAll = useCallback(async () => {
@@ -207,7 +228,7 @@ export default function StudioPage() {
         ab.copyToChannel(r.samples, 0);
         engine.buffers.set(saved.audioId, ab);
         setSelectedTake(saved.id);
-        setFlash(`${roleLabel(recRoleRef.current)} salvata ✓ · tocca Ascolta`);
+        setFlash(`${roleLabel(recRoleRef.current)} salvata ✓ · premi Play`);
       } catch (e) {
         setError(`Non sono riuscito a salvare la registrazione (${e?.message || e}).`);
       }
@@ -398,6 +419,16 @@ export default function StudioPage() {
     } else setSync({ queue: rest, marked: sync.marked + 1 });
   };
 
+  // posizione in battute come il display di Logic ("5.1" = battuta 5, battito 1)
+  const barBeat = (t) => {
+    if (!bpm) return formatTime(Math.max(0, t));
+    const rel = t - attack;
+    if (rel < -0.01) return 'intro';
+    const b = Math.floor(rel / barDur);
+    const be = Math.floor((rel - b * barDur) / beatDur);
+    return `${b + 1}.${be + 1}`;
+  };
+
   if (track === undefined) return <div className="studio" />;
   if (!track) return <div className="page empty">Traccia non trovata.</div>;
 
@@ -445,20 +476,47 @@ export default function StudioPage() {
           <div className="studio-kicker">Studio</div>
           <div className="studio-track ellipsis">{track.title || 'Senza titolo'}</div>
         </div>
-        {beat && (
-          <span className="muted small studio-meta">
-            {bpm ? `${bpm} BPM` : 'BPM ?'}
-            {beat.key ? ` · ${keyShort(beat.key)}` : ''}
-          </span>
-        )}
+        <button className="btn sm" onClick={() => setSheet('settings')} disabled={active}>
+          Regola
+        </button>
       </header>
 
-      <div className="tabs studio-tabs" role="tablist">
-        <button role="tab" aria-selected={view === 'rec'} className={`tab${view === 'rec' ? ' on' : ''}`} onClick={() => !active && setView('rec')} disabled={active && view !== 'rec'}>
-          🎙 Registra
+      {/* barra di controllo come Logic: trasporto + display */}
+      <div className="ctrl-bar">
+        <button className={`cb-btn${mode === 'playing' ? ' on' : ''}`} onClick={onPlay} disabled={!beatBuf || mode === 'recording' || mode === 'starting' || mode === 'saving'} aria-label={mode === 'playing' ? 'Stop' : 'Play'}>
+          {mode === 'loading' ? <span className="spinner" /> : <Icon name={mode === 'playing' ? 'stop' : 'play'} size={20} />}
         </button>
-        <button role="tab" aria-selected={view === 'mix'} className={`tab${view === 'mix' ? ' on' : ''}`} onClick={() => !active && setView('mix')} disabled={active && view !== 'mix'}>
-          🎚 Montaggio{takes.length ? ` (${takes.length})` : ''}
+        <button
+          className={`cb-btn rec${mode === 'recording' ? ' on' : ''}`}
+          onClick={() => {
+            if (modeRef.current === 'recording') return onRec();
+            if (view !== 'rec') {
+              autoBackRef.current = true;
+              setView('rec');
+            }
+            onRec();
+          }}
+          disabled={!beatBuf || mode === 'playing' || mode === 'saving' || mode === 'starting' || mode === 'loading'}
+          aria-label={mode === 'recording' ? 'Ferma registrazione' : `Registra su ${roleLabel(recRole)}`}
+        >
+          {mode === 'recording' ? <Icon name="stop" size={18} /> : <span className="cb-rec-dot" />}
+        </button>
+        <div className="lcd" role="group" aria-label="Display">
+          <span className="lcd-cell mono">{barBeat(active ? pos : startAt)}</span>
+          <button className="lcd-cell" onClick={() => setSheet('settings')} disabled={active}>
+            <b>{bpm || '—'}</b>
+            <small>BPM</small>
+          </button>
+          <button className="lcd-cell key" onClick={() => setSheet('key')} disabled={active || !beat}>
+            <b>{beat?.key ? keyShort(beat.key) : 'Chiave?'}</b>
+          </button>
+          <span className="lcd-cell">4/4</span>
+        </div>
+        <button className={`cb-btn small${countIn ? ' on' : ''}`} onClick={() => setCountIn(!countIn)} aria-label="Click prima di registrare" title="Click: 4 battiti prima di registrare">
+          <Icon name="allenamento" size={16} />
+        </button>
+        <button className={`cb-btn small txt${view === 'rec' ? ' on' : ''}`} onClick={() => setView(view === 'rec' ? 'mix' : 'rec')} disabled={active}>
+          Testo
         </button>
       </div>
 
@@ -499,6 +557,16 @@ export default function StudioPage() {
           }
           onOpenMix={() => setSheet('mix')}
           track={track}
+          barDur={barDur}
+          attack={attack}
+          recRole={recRole}
+          setRecRole={setRecRole}
+          selCh={selCh}
+          setSelCh={setSelCh}
+          channels={channels}
+          setChannel={setChannel}
+          fxCount={fxCount}
+          onOpenChannelFx={(role) => (setSelCh(role), setSheet('chfx'))}
         />
       )}
 
@@ -648,7 +716,7 @@ export default function StudioPage() {
         <div className="transport">
           <button className="t-btn" onClick={() => setView('mix')} disabled={active}>
             <span className="t-count">{takes.length}</span>
-            <span>Montaggio</span>
+            <span>Studio</span>
           </button>
           <button className="t-btn" onClick={onPlay} disabled={!beatBuf || mode === 'recording' || mode === 'starting' || mode === 'saving' || mode === 'loading'}>
             {mode === 'loading' ? <span className="spinner" /> : <Icon name={mode === 'playing' ? 'stop' : 'play'} size={26} />}
@@ -677,6 +745,24 @@ export default function StudioPage() {
       )}
 
       {sheet === 'fx' && <EffectsSheet fx={fx} onChange={changeFx} onPlay={onPlay} playing={mode === 'playing'} loading={mode === 'loading'} onClose={() => setSheet(null)} />}
+      {sheet === 'chfx' && (
+        <EffectsSheet title={`Plug-in · ${roleLabel(selCh)}`} fx={chFx(selCh)} onChange={(strip) => setChannel(selCh, { fx: strip })} onPlay={onPlay} playing={mode === 'playing'} loading={mode === 'loading'} onClose={() => setSheet(null)} />
+      )}
+      {sheet === 'key' && beat && (
+        <Sheet open onClose={() => setSheet(null)} title="Chiave del beat">
+          <div className="stack">
+            <p className="muted small">L'ho riconosciuta ascoltando il beat{beat.auto?.key ? '' : ' (o l\'hai scelta tu)'}. Se non ti torna, scegli quella giusta.</p>
+            <select className="input" value={beat.key || ''} onChange={(e) => (updateBeat(beat.id, { key: e.target.value, auto: { ...(beat.auto || {}), key: false } }), setSheet(null))}>
+              <option value="">— non so —</option>
+              {KEYS.map((k) => (
+                <option key={k.id} value={k.id}>
+                  {k.full}
+                </option>
+              ))}
+            </select>
+          </div>
+        </Sheet>
+      )}
       {sheet === 'mix' && (
         <MixSheet
           takes={takes}

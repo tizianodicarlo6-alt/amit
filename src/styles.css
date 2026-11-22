@@ -737,3 +737,27 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .note-title { width: 100%; border: 0; outline: none; background: transparent; color: var(--text); font: inherit; font-size: 26px; font-weight: 800; line-height: 1.25; padding: 2px 0 6px; }
 .note-title::placeholder { color: #44444a; }
 .idea-title { font-weight: 800; font-size: 17px; margin: 2px 0; }
+
+/* Studio v2: barra di controllo come Logic */
+.ctrl-bar { display: flex; align-items: center; gap: 6px; padding: 6px; margin: 2px 0 8px; border-radius: 14px; background: #141418; border: 1px solid var(--border); }
+.cb-btn { flex: none; width: 42px; height: 42px; border-radius: 10px; border: 1px solid #2c2c33; background: #1d1d22; color: #fff; display: grid; place-items: center; font-weight: 800; }
+.cb-btn.small { width: 38px; }
+.cb-btn.txt { width: auto; padding: 0 10px; font-size: 13px; }
+.cb-btn.on { background: #fff; color: #000; }
+.cb-btn.rec.on { background: #ff3b3b; color: #fff; border-color: #ff3b3b; }
+.cb-btn:disabled { opacity: .4; }
+.cb-rec-dot { width: 16px; height: 16px; border-radius: 50%; background: #ff3b3b; }
+.lcd { flex: 1; min-width: 0; display: flex; align-items: stretch; justify-content: space-between; gap: 2px; height: 42px; padding: 0 4px; border-radius: 10px; background: #0b1622; border: 1px solid #23405f; color: #cfe6ff; }
+.lcd-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; border: 0; background: none; color: inherit; font-size: 13px; font-weight: 800; padding: 0 3px; white-space: nowrap; }
+.lcd-cell small { font-size: 8.5px; font-weight: 700; opacity: .7; letter-spacing: .05em; }
+.lcd-cell.key b { color: #fff; }
+.ms button.r.on { background: #ff3b3b; color: #fff; border-color: #ff3b3b; }
+.arr2-row.ch.sel .lab { background: #24242a; color: #fff; }
+.ch-dot { width: 10px; height: 10px; border-radius: 50%; background: #4c9aff; }
+.ch-dot.role-double { background: #b26cf5; } .ch-dot.role-adlib { background: #f5a524; }
+.region.solo { box-shadow: 0 0 0 2px #ffd23f; }
+.reg-name { font-size: 9.5px; }
+.bmap { position: absolute; top: 2px; height: 14px; font-size: 8.5px; font-weight: 800; line-height: 14px; padding: 0 3px; border-radius: 3px; color: #000; background: #8a8a94; overflow: hidden; white-space: nowrap; pointer-events: none; opacity: .9; }
+.bmap.k-rit { background: #ffd23f; } .bmap.k-strofa { background: #4c9aff; } .bmap.k-intro, .bmap.k-outro { background: #8a8a94; } .bmap.k-break { background: #b26cf5; }
+.steps.two .step-n { font-size: 12px; }
+.beat-change { display: block; margin: -4px 0 6px auto; border: 0; background: none; color: var(--muted); font-size: 12px; text-decoration: underline; padding: 2px 0; }

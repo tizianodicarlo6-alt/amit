@@ -67,7 +67,7 @@ const SLOTS = [
   },
 ];
 
-export default function EffectsSheet({ fx, onChange, onPlay, playing, loading, onClose }) {
+export default function EffectsSheet({ fx, onChange, onPlay, playing, loading, onClose, title = "Effetti voce" }) {
   const [strip, setStrip] = useState(() => normalizeStrip(fx));
   const [open, setOpen] = useState('comp');
   const preset = presetOf(strip);
@@ -90,7 +90,7 @@ export default function EffectsSheet({ fx, onChange, onPlay, playing, loading, o
   };
 
   return (
-    <Sheet open onClose={onClose} title="Effetti voce">
+    <Sheet open onClose={onClose} title={title}>
       <div className="stack">
         <div className="sheet-top">
           <span className="muted small grow">Valgono per tutte le take. Tocca ▶ e regola mentre ascolti.</span>

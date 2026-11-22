@@ -132,10 +132,6 @@ export default function MixEditor(p) {
     await updateTake(t.id, changes);
     p.onEdited();
   };
-  const toggleSolo = (id) => {
-    setSolo((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
-    p.onEdited();
-  };
   const selGeom = selected ? geom(selected) : null;
   const playheadInside = selGeom && position > selGeom.pos + selGeom.ts + 0.05 && position < selGeom.pos + selGeom.te - 0.05;
   const split = async () => {
@@ -169,19 +165,58 @@ export default function MixEditor(p) {
     return [new File([engine.renderVoiceAligned({ voice })], `${slug(`${p.track.title} - ${labels.get(selected.id)}`)}.wav`, { type: 'audio/wav' })];
   };
 
-  const tickEvery = pps >= 50 ? 1 : pps >= 25 ? 2 : pps >= 12 ? 5 : 10;
+  // righello a battute (come Logic): numeri ogni 1, 2, 4… battute a seconda dello zoom
+  const barDur = p.barDur || 0;
+  const anchor = barDur ? (p.attack || 0) - Math.floor((p.attack || 0) / barDur) * barDur : 0;
+  const barStep = barDur ? [1, 2, 4, 8, 16].find((k) => k * barDur * pps >= 30) || 16 : 0;
   const ticks = [];
-  for (let s = 0; s <= duration + 1; s += tickEvery) ticks.push(s);
+  if (barDur) for (let t = anchor, n = 1; t <= duration + 0.01; t += barDur * barStep, n += barStep) ticks.push({ t, n });
+  else for (let t = 0; t <= duration + 1; t += 5) ticks.push({ t, n: formatTime(t) });
+
+  // canali (come le tracce di Logic): le take di ogni ruolo stanno nel loro canale, su più righe se si sovrappongono
+  const CH = [
+    { id: 'main', name: 'Voce' },
+    { id: 'double', name: 'Doppie' },
+    { id: 'adlib', name: 'Adlib' },
+  ];
+  const lanesOf = (role) => {
+    const list = rows.filter((t) => (t.role || 'main') === role).map((t) => ({ t, g: geom(t) }));
+    list.sort((a, b) => a.g.left - b.g.left);
+    const ends = [];
+    for (const it of list) {
+      let k = ends.findIndex((e) => e <= it.g.left - 2);
+      if (k < 0) {
+        k = ends.length;
+        ends.push(0);
+      }
+      ends[k] = it.g.left + it.g.width;
+      it.lane = k;
+    }
+    return { list, n: Math.max(1, ends.length) };
+  };
+  const chTakes = (role) => takes.filter((t) => (t.role || 'main') === role);
+  const chMuted = (role) => chTakes(role).length > 0 && chTakes(role).every((t) => t.included === false);
+  const chSolo = (role) => chTakes(role).length > 0 && chTakes(role).every((t) => solo.includes(t.id));
+  const toggleChMute = async (role) => {
+    const m = chMuted(role);
+    for (const t of chTakes(role)) await updateTake(t.id, { included: m });
+    p.onEdited();
+  };
+  const toggleChSolo = (role) => {
+    const ids = chTakes(role).map((t) => t.id);
+    setSolo((s) => (chSolo(role) ? s.filter((x) => !ids.includes(x)) : [...new Set([...s, ...ids])]));
+    p.onEdited();
+  };
+  const selCh = p.selCh || 'main';
+  const ch = p.channels?.[selCh] || {};
+  const LANE_H = 44;
 
   return (
     <div className="mixed">
       {/* barra strumenti */}
       <div className="mix-tools">
-        <button className="btn sm" onClick={p.onOpenFx}>
-          🎛 Effetti
-        </button>
         <button className="btn sm primary" onClick={p.onOpenMix}>
-          💾 Mix & Salva
+          Mix & Salva
         </button>
         <span className="grow" />
         <button className="btn sm" onClick={() => setZoomIdx((z) => Math.max(0, z - 1))} disabled={zoomIdx === 0} aria-label="Allontana">
@@ -193,15 +228,15 @@ export default function MixEditor(p) {
         </button>
       </div>
 
-      {/* area di arrangiamento: righello, beat e una riga per take */}
+      {/* tracce: righello a battute, beat, canali voce */}
       <div className="arr2" ref={scrollRef} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => setDrag(null)}>
         <div className="arr2-inner" style={{ width: LABEL_W + contentW }}>
           <div className="arr2-row ruler">
             <div className="lab corner" />
             <div className="lane" style={{ width: contentW }} onClick={(e) => p.onSeek(laneTime(e))}>
-              {ticks.map((s) => (
-                <span key={s} className="tick" style={{ left: s * pps }}>
-                  {formatTime(s)}
+              {ticks.map(({ t, n }) => (
+                <span key={t} className="tick" style={{ left: t * pps }}>
+                  {n}
                 </span>
               ))}
               {blocks.map((b) => (
@@ -212,73 +247,75 @@ export default function MixEditor(p) {
             </div>
           </div>
           <div className="arr2-row beat">
-            <div className="lab">Beat</div>
+            <div className="lab">
+              <span className="lab-name">Beat</span>
+            </div>
             <div className="lane" style={{ width: contentW }} onClick={(e) => p.onSeek(laneTime(e))}>
               {beat?.peaks && <Bars peaks={beat.peaks} width={duration * pps} height={30} />}
+              {(p.beatMap || []).map((m) => (
+                <span key={m.start} className={`bmap k-${m.kind}`} style={{ left: m.start * pps, width: Math.max(8, (m.end - m.start) * pps) }}>
+                  {m.label}
+                </span>
+              ))}
             </div>
           </div>
 
-          {rows.map((t) => {
-            const g = geom(t);
-            const sel = t.id === selectedId;
-            const muted = t.included === false;
-            const soloed = solo.includes(t.id);
-            const role = t.role || 'main';
+          {CH.map((c) => {
+            const { list, n } = lanesOf(c.id);
+            const armed = p.recRole === c.id;
             return (
-              <div key={t.id} className={`arr2-row take${sel ? ' sel' : ''}`}>
-                <div className={`lab role-${role}`} onClick={() => setSelectedId(t.id)}>
-                  <span className="lab-name">{labels.get(t.id)}</span>
+              <div key={c.id} className={`arr2-row take ch${selCh === c.id && !selected ? ' sel' : ''}`} style={{ height: n * LANE_H + 10 }}>
+                <div className={`lab role-${c.id}`} onClick={() => (setSelectedId(null), p.setSelCh?.(c.id))}>
+                  <span className="lab-name">{c.name}</span>
                   <span className="ms">
-                    <button
-                      className={`m${muted ? ' on' : ''}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        edit(t, { included: muted });
-                      }}
-                      aria-label={muted ? 'Togli muto' : 'Muto'}
-                    >
+                    <button className={`m${chMuted(c.id) ? ' on' : ''}`} onClick={(e) => (e.stopPropagation(), toggleChMute(c.id))} aria-label={`Muto ${c.name}`}>
                       M
                     </button>
-                    <button
-                      className={`s${soloed ? ' on' : ''}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSolo(t.id);
-                      }}
-                      aria-label="Solo"
-                    >
+                    <button className={`s${chSolo(c.id) ? ' on' : ''}`} onClick={(e) => (e.stopPropagation(), toggleChSolo(c.id))} aria-label={`Solo ${c.name}`}>
                       S
+                    </button>
+                    <button className={`r${armed ? ' on' : ''}`} onClick={(e) => (e.stopPropagation(), p.setRecRole?.(c.id))} aria-label={`Registra su ${c.name}`}>
+                      R
                     </button>
                   </span>
                 </div>
-                <div className="lane" style={{ width: contentW }} onClick={() => setSelectedId(null)}>
-                  <div
-                    className={`region role-${role}${sel ? ' sel' : ''}${muted ? ' off' : ''}`}
-                    style={{ left: g.left, width: g.width }}
-                    onPointerDown={(e) => onDown(e, t, 'move')}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="reg-inner" style={{ left: -g.ts * pps, width: t.duration * pps }}>
-                      <Bars peaks={peaks[t.audioId]} width={t.duration * pps} />
-                    </div>
-                    {t.pitch ? <span className="reg-name">{`${t.pitch > 0 ? '+' : ''}${t.pitch} st`}</span> : null}
-                    {sel && (
-                      <>
-                        <span className="handle l" onPointerDown={(e) => onDown(e, t, 'start')} />
-                        <span className="handle r" onPointerDown={(e) => onDown(e, t, 'end')} />
-                      </>
-                    )}
-                  </div>
+                <div className="lane" style={{ width: contentW }} onClick={(e) => (setSelectedId(null), p.setSelCh?.(c.id), p.onSeek(laneTime(e)))}>
+                  {list.map(({ t, g, lane }) => {
+                    const sel = t.id === selectedId;
+                    const muted = t.included === false;
+                    return (
+                      <div
+                        key={t.id}
+                        className={`region role-${c.id}${sel ? ' sel' : ''}${muted ? ' off' : ''}${solo.includes(t.id) ? ' solo' : ''}`}
+                        style={{ left: g.left, width: g.width, top: 5 + lane * LANE_H, height: LANE_H - 8, bottom: 'auto' }}
+                        onPointerDown={(e) => onDown(e, t, 'move')}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="reg-inner" style={{ left: -g.ts * pps, width: t.duration * pps }}>
+                          <Bars peaks={peaks[t.audioId]} width={t.duration * pps} />
+                        </div>
+                        <span className="reg-name">
+                          {labels.get(t.id)}
+                          {t.pitch ? ` · ${t.pitch > 0 ? '+' : ''}${t.pitch} st` : ''}
+                        </span>
+                        {sel && (
+                          <>
+                            <span className="handle l" onPointerDown={(e) => onDown(e, t, 'start')} />
+                            <span className="handle r" onPointerDown={(e) => onDown(e, t, 'end')} />
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
           })}
-          {rows.length === 0 && <div className="arr2-empty muted small">Nessuna take: vai su "Registra" e premi il tasto rosso.</div>}
           <div className="playhead" style={{ left: LABEL_W + position * pps }} />
         </div>
       </div>
 
-      {/* pannello fisso del blocco selezionato */}
+      {/* pannello in basso: il blocco scelto, oppure il canale scelto (come l'inspector di Logic) */}
       <div className="inspector2">
         {selected ? (
           <>
@@ -314,6 +351,9 @@ export default function MixEditor(p) {
               </button>
             </div>
             <div className="insp-row">
+              <button className="btn sm" onClick={() => edit(selected, { included: selected.included === false })}>
+                {selected.included === false ? 'Accendi' : 'Spegni'}
+              </button>
               <button className="btn sm" onClick={() => edit(selected, { offset: selected.offset - 0.01 })} aria-label="Sposta indietro">
                 ◀ 10ms
               </button>
@@ -332,23 +372,43 @@ export default function MixEditor(p) {
             </div>
           </>
         ) : (
-          <p className="muted small insp-hint">
-            Tocca un blocco per tagliarlo (bordi bianchi), spostarlo, cambiare volume o pitch. <b>M</b> = muto, <b>S</b> = ascolta solo quella.
-          </p>
+          <>
+            <div className="insp-row">
+              <span className={`ch-dot role-${selCh}`} />
+              <span className="reco-title">Canale {CH.find((c) => c.id === selCh)?.name}</span>
+              <span className="grow" />
+              <button className="btn sm primary" onClick={() => p.onOpenChannelFx?.(selCh)}>
+                Plug-in{p.fxCount ? ` (${p.fxCount(selCh)})` : ''}
+              </button>
+            </div>
+            <div className="insp-row">
+              <span className="fx-label">Vol</span>
+              <button className="btn sm" onClick={() => p.setChannel?.(selCh, { db: Math.max(-24, (ch.db || 0) - 1) })} aria-label="Volume canale giù">
+                −
+              </button>
+              <span className="mono insp-val">
+                {(ch.db || 0) > 0 ? '+' : ''}
+                {ch.db || 0} dB
+              </span>
+              <button className="btn sm" onClick={() => p.setChannel?.(selCh, { db: Math.min(12, (ch.db || 0) + 1) })} aria-label="Volume canale su">
+                +
+              </button>
+              <span className="fx-label">Pan</span>
+              {[
+                [-0.5, 'Sx'],
+                [null, 'C'],
+                [0.5, 'Dx'],
+              ].map(([v, l]) => (
+                <button key={l} className={`chip sm${(ch.pan ?? null) === v ? ' on' : ''}`} onClick={() => p.setChannel?.(selCh, { pan: v })}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            <p className="muted small insp-hint">
+              Tocca un blocco per tagliarlo, spostarlo, cambiare volume o pitch. <b>M</b> muto, <b>S</b> solo, <b>R</b> registri su questo canale.
+            </p>
+          </>
         )}
-      </div>
-
-      {/* trasporto */}
-      <div className="transport mixed-transport">
-        <button className="t-btn" onClick={() => p.onSeek(0)} disabled={loading}>
-          <Icon name="back" size={24} />
-          <span>Inizio</span>
-        </button>
-        <button className="play-main" onClick={p.onPlay} disabled={!p.beatBuf || loading} aria-label={playing ? 'Stop' : 'Ascolta'}>
-          {loading ? <span className="spinner big" /> : <Icon name={playing ? 'stop' : 'play'} size={34} />}
-        </button>
-        <span className="mono mixed-time">{formatTime(Math.max(0, position))}</span>
-        <span className="muted small mixed-solo">{solo.length ? `Solo: ${solo.length}` : ''}</span>
       </div>
 
       {exportOpen && selected && (
