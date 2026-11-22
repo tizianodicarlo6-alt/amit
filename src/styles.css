@@ -674,3 +674,17 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .nn-line .input { flex: 1; min-width: 0; }
 .nn-count { min-width: 44px; text-align: right; font-size: 13px; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
 .nn-count.fit { color: #3ddc84; } .nn-count.near { color: #f5c542; } .nn-count.off { color: #ff6b6b; }
+
+/* 🔥 Fuoco */
+.flame { position: relative; display: inline-block; width: 26px; height: 30px; opacity: calc(.25 + var(--f) * .75); transform: scale(calc(.55 + var(--f) * .55)); transform-origin: 50% 100%; transition: transform .5s, opacity .5s; }
+.flame .fl { position: absolute; left: 50%; bottom: 0; border-radius: 50% 0 50% 50%; transform: translateX(-50%) rotate(-45deg); animation: flick calc(1.6s - var(--f) * .9s) ease-in-out infinite alternate; }
+.flame .outer { width: 20px; height: 20px; bottom: 4px; background: radial-gradient(circle at 70% 30%, #ffd24a, #ff7a1a 55%, #d7261e); filter: blur(.3px); box-shadow: 0 0 calc(var(--f) * 18px) rgba(255, 120, 30, calc(var(--f) * .9)); }
+.flame .inner { width: 9px; height: 9px; bottom: 4px; background: radial-gradient(circle at 70% 30%, #fff8d0, #ffd24a); animation-delay: -.3s; }
+.flame.burst { animation: burst .7s ease-out; }
+@keyframes flick { 0% { transform: translateX(-50%) rotate(-45deg) scale(1); } 50% { transform: translateX(-52%) rotate(-41deg) scale(1.06, .96); } 100% { transform: translateX(-48%) rotate(-49deg) scale(.97, 1.05); } }
+@keyframes burst { 0% { filter: brightness(1); } 30% { filter: brightness(1.8) drop-shadow(0 0 12px #ff8a2a); transform: scale(1.35); } 100% { filter: brightness(1); } }
+@media (prefers-reduced-motion: reduce) { .flame .fl, .flame.burst { animation: none; } }
+.ember { display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50% 0 50% 50%; transform: rotate(-45deg) translateY(-1px); vertical-align: middle; }
+.ember.h1 { background: #7a3a1e; }
+.ember.h2 { background: #ff7a1a; box-shadow: 0 0 4px #ff7a1a; }
+.ember.h3 { width: 9px; height: 9px; background: radial-gradient(circle at 70% 30%, #ffe27a, #ff5a1a); box-shadow: 0 0 8px #ff6a1a; }

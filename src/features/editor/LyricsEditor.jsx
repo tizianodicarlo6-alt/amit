@@ -1,4 +1,9 @@
-import { memo, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { heatLines, sectionFire } from '../../lib/fuoco.js';
+import { loadRank } from '../../lib/rimario.js';
+import { useProfile } from '../../lib/profile.js';
+import Flame from '../../components/Flame.jsx';
+
 import { newSection, updateTrack } from '../../db/db.js';
 import { SECTION_TYPES, RHYME_COLORS, sectionLabel } from '../../constants.js';
 import { analyzeRhymes, countLineSyllables, multiColors, multiKeys, tokenizeLine } from '../../lib/italiano.js';
@@ -59,7 +64,7 @@ function Toggle({ on, onChange, label }) {
 }
 
 // Una riga "disegnata" sotto al campo di testo: parole colorate + sillabe.
-const Line = memo(function Line({ line, analysis, showRhymes, showSyllables, target }) {
+const Line = memo(function Line({ line, analysis, showRhymes, showSyllables, target, heat }) {
   const syl = showSyllables && line.trim() ? countLineSyllables(line) : null;
   let content;
   if (!line) content = '​';
@@ -98,6 +103,7 @@ const Line = memo(function Line({ line, analysis, showRhymes, showSyllables, tar
   return (
     <div className="lyr-line">
       {content}
+      {heat > 0 && <span className={`ember h${heat}`} aria-hidden />}
       {syl !== null && (
         <span className={`syl${target ? (syl === target ? ' fit' : Math.abs(syl - target) <= 1 ? ' near' : ' off') : ''}`}>
           {syl}
@@ -110,13 +116,13 @@ const Line = memo(function Line({ line, analysis, showRhymes, showSyllables, tar
 });
 
 // Campo di testo trasparente sopra al "disegno": si scrive normalmente, si vedono i colori.
-function SectionText({ text, onChange, analysis, showRhymes, showSyllables, onFocus, onCaret, targets }) {
+function SectionText({ text, onChange, analysis, showRhymes, showSyllables, onFocus, onCaret, targets, heat }) {
   const lines = text.split('\n');
   return (
     <div className={`lyr${showSyllables ? ' with-syl' : ''}`}>
       <div className="lyr-back" aria-hidden="true">
         {lines.map((l, i) => (
-          <Line key={i} line={l} analysis={analysis} showRhymes={showRhymes} showSyllables={showSyllables} target={targets?.[i]} />
+          <Line key={i} line={l} analysis={analysis} showRhymes={showRhymes} showSyllables={showSyllables} target={targets?.[i]} heat={heat?.[i]?.level || 0} />
         ))}
       </div>
       <textarea
@@ -140,6 +146,18 @@ export default function LyricsEditor({ track, onFocusSection, activeId, targets 
   const showRhymes = mode !== 'off';
   const [showSyllables, setShowSyllables] = useState(() => readPref('q.sillabe', true));
   const status = useAutosave(sections, (v) => updateTrack(track.id, { sections: v }));
+  // 🔥 il fuoco (per i soci): quanto spacca ogni riga e la strofa che stai scrivendo
+  const profile = useProfile();
+  const [showFire, setShowFire] = useState(() => readPref('q.fuoco', true));
+  const fireOn = !!profile && showFire;
+  const [rank, setRank] = useState(null);
+  useEffect(() => {
+    if (fireOn) loadRank().then(setRank).catch(() => {});
+  }, [fireOn]);
+  const heats = useMemo(() => (fireOn ? Object.fromEntries(sections.map((x) => [x.id, heatLines(x.text.split('\n'), { rank })])) : {}), [sections, fireOn, rank]);
+  const [lastFocus, setLastFocus] = useState(null);
+  const fireSec = activeId || lastFocus || sections[sections.length - 1]?.id;
+  const fire = fireOn && heats[fireSec] ? sectionFire(heats[fireSec]) : 0;
 
   const allText = useMemo(() => sections.map((s) => s.text).join('\n'), [sections]);
   const analysis = useMemo(
@@ -188,7 +206,9 @@ export default function LyricsEditor({ track, onFocusSection, activeId, targets 
         <button className="btn sm" onPointerDown={(e) => e.preventDefault()} onClick={openRimario}>
           Rimario
         </button>
+        {profile && <Toggle on={showFire} onChange={(v) => (setShowFire(v), writePref('q.fuoco', v))} label="Fuoco" />}
         <span className="grow" />
+        {fireOn && <Flame value={fire} />}
         <SaveStatus status={status} />
       </div>
       {rimario && <RhymeSheet word={rimario.word} prev={rimario.prev} onClose={() => setRimario(null)} />}
@@ -238,7 +258,7 @@ export default function LyricsEditor({ track, onFocusSection, activeId, targets 
                 <Icon name="trash" size={18} />
               </button>
             </div>
-            <SectionText targets={targets[s.id]} onCaret={(text, pos) => (caret.current = { text, pos })} onFocus={() => onFocusSection?.(s.id)} text={s.text} onChange={(text) => update(s.id, { text })} analysis={analysis} showRhymes={showRhymes} showSyllables={showSyllables} />
+            <SectionText targets={targets[s.id]} onCaret={(text, pos) => (caret.current = { text, pos })} onFocus={() => (setLastFocus(s.id), onFocusSection?.(s.id))} heat={heats[s.id]} text={s.text} onChange={(text) => update(s.id, { text })} analysis={analysis} showRhymes={showRhymes} showSyllables={showSyllables} />
           </section>
         );
       })}

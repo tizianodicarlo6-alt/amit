@@ -3,6 +3,27 @@
 import { assonanceKey, rhymeKey, vowelSeq } from './italiano.js';
 
 let indexP = null;
+let textP = null;
+const wordsText = () => {
+  if (!textP)
+    textP = fetch(`${import.meta.env.BASE_URL}words-it.txt`)
+      .then((r) => {
+        if (!r.ok) throw new Error('rimario non disponibile');
+        return r.text();
+      })
+      .catch((e) => {
+        textP = null;
+        throw e;
+      });
+  return textP;
+};
+
+let rankP = null;
+/** Posizione di ogni parola nella lista delle più usate (0 = la più comune). */
+export function loadRank() {
+  if (!rankP) rankP = wordsText().then((t) => new Map(t.split('\n').filter(Boolean).map((w, i) => [w, i])));
+  return rankP;
+}
 
 /** Indice delle parole: per chiave di rima, di assonanza e per le ultime 3 vocali. */
 export function buildIndex(words) {
@@ -25,11 +46,7 @@ export function buildIndex(words) {
 
 export function loadIndex() {
   if (!indexP) {
-    indexP = fetch(`${import.meta.env.BASE_URL}words-it.txt`)
-      .then((r) => {
-        if (!r.ok) throw new Error('rimario non disponibile');
-        return r.text();
-      })
+    indexP = wordsText()
       .then((t) => buildIndex(t.split('\n').filter(Boolean)))
       .catch((e) => {
         indexP = null;
