@@ -11,7 +11,6 @@ export default function TraccePage() {
   const tracks = useDbQuery(() => db.tracks.orderBy('updatedAt').reverse().toArray(), []);
   const projects = useDbQuery(() => db.projects.toArray(), []) || [];
   const [status, setStatus] = useState('all');
-  const [editing, setEditing] = useState(false); // modalità "elimina"
   const remove = async (t) => {
     if (!confirm(`Eliminare la traccia "${t.title || 'Senza titolo'}"? Le note collegate restano nelle Note.`)) return;
     await deleteTrack(t.id);
@@ -27,11 +26,6 @@ export default function TraccePage() {
     <div className="page">
       <header className="page-head">
         <h1 className="grow">Tracce</h1>
-        {tracks?.length > 0 && (
-          <button className={`btn sm${editing ? ' primary' : ' ghost'}`} onClick={() => setEditing(!editing)}>
-            {editing ? 'Fine' : 'Modifica'}
-          </button>
-        )}
         <button className="btn primary" onClick={create}>
           <Icon name="plus" size={20} /> Nuova
         </button>
@@ -67,11 +61,9 @@ export default function TraccePage() {
             track={t}
             projectName={projectName[t.projectId]}
             extra={
-              editing && (
-                <button className="track-del" onClick={() => remove(t)} aria-label={`Elimina ${t.title || 'traccia'}`}>
-                  <Icon name="trash" size={20} />
-                </button>
-              )
+              <button className="track-del" onClick={() => remove(t)} aria-label={`Elimina ${t.title || 'traccia'}`}>
+                <Icon name="trash" size={20} />
+              </button>
             }
           />
         ))}

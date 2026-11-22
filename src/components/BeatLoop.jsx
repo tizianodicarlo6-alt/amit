@@ -58,6 +58,7 @@ const HANDLE = 22; // px: quanto vicino al bordo per allargare
  */
 export default function BeatLoop({ beat, region, onRegion, marks = [], caption, attack: knownAttack = null, overlay = null, children, pauseSignal = 0 }) {
   const [fixing, setFixing] = useState(false); // sto dando un nome al pezzo scelto
+  const [named, setNamed] = useState(''); // conferma dopo il nome
   const [decoded, setDecoded] = useState(null);
   const [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -268,6 +269,8 @@ export default function BeatLoop({ beat, region, onRegion, marks = [], caption, 
     if (!region) return;
     updateBeat(beat.id, { map: assignRange(beat.map || [], region.from, Math.min(region.to, duration), kind, (4 * 60) / beat.bpm), mapEdited: true });
     setFixing(false);
+    setNamed(`✓ Salvato: ${regionLabel(region, grid).split(' · ')[0]} è ${mapKindName(kind)}`);
+    setTimeout(() => setNamed(''), 3500);
   };
   const bars = grid.barDur ? Math.floor((duration - grid.anchor) / grid.barDur) : 0;
 
@@ -308,7 +311,9 @@ export default function BeatLoop({ beat, region, onRegion, marks = [], caption, 
       )}
       {region && beat.bpm && (
         <div className="bl-fixbar">
-          {!fixing ? (
+          {named ? (
+            <span className="bl-named">{named}</span>
+          ) : !fixing ? (
             <button className="bl-name" onClick={() => setFixing(true)}>
               🏷 Questo pezzo è…
             </button>

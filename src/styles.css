@@ -622,7 +622,7 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 
 /* Messaggi tra soci */
 .home-top .msg-btn { margin-left: auto; position: relative; }
-.badge { position: absolute; top: 2px; right: 2px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #ff3b3b; color: #fff; font-size: 11px; font-weight: 800; display: grid; place-items: center; }
+.msg-btn .badge { position: absolute; top: 2px; right: 2px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #ff3b3b; color: #fff; font-size: 11px; font-weight: 800; display: grid; place-items: center; }
 .messaggi { display: flex; flex-direction: column; min-height: 100dvh; padding-bottom: 0; }
 .chat { display: flex; flex-direction: column; flex: 1; }
 .chat-list { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 8px 0 calc(90px + var(--safe-b)); }
@@ -841,8 +841,9 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .bl-fixq { font-weight: 800; }
 .note-head .btn.sm { padding-left: 10px; padding-right: 10px; }
 .bl-name { border: 1px dashed #ffffff40; background: none; color: var(--muted); font-size: 12px; font-weight: 700; border-radius: 999px; padding: 5px 12px; }
-.track-card { position: relative; }
-.track-del { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%; border: 0; background: #ff3b3b; color: #fff; display: flex; align-items: center; justify-content: center; }
+.track-del { flex: none; align-self: stretch; width: 52px; border: 0; border-left: 1px solid var(--border); background: none; color: var(--muted); display: flex; align-items: center; justify-content: center; }
+.track-del:active { color: #ff3b3b; }
+.bl-named { font-size: 12px; font-weight: 800; color: #35c46a; padding: 5px 0; }
 /* Finite */
 .fin-tabs { margin: 4px 0 12px; align-self: flex-start; }
 .fin-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
