@@ -36,7 +36,7 @@ export default function TaccuinoPage() {
       if (tag && !i.tags?.includes(tag)) return false;
       if (type !== 'all' && i.type !== type) return false;
       if (!q) return true;
-      const hay = normalize([i.text, ...(i.tags || []), trackTitle[i.trackId]].join(' '));
+      const hay = normalize([i.title, i.text, ...(i.tags || []), trackTitle[i.trackId]].join(' '));
       return hay.includes(q);
     });
   }, [ideas, query, tag, type, trackTitle]);
@@ -44,12 +44,12 @@ export default function TaccuinoPage() {
   return (
     <div className="page">
       <header className="page-head">
-        <h1>Taccuino</h1>
+        <h1>Note</h1>
       </header>
 
       <div className="search">
         <Icon name="search" size={20} />
-        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cerca nelle idee…" />
+        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cerca nelle note…" />
       </div>
 
       <div className="chips scroll-x">

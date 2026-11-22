@@ -30,7 +30,7 @@ function Ritorno({ onOpen }) {
     return pool[Math.floor(Math.random() * pool.length)];
   }, [ideas, n]); // eslint-disable-line react-hooks/exhaustive-deps
   if (ideas === null) return <span className="spinner" />;
-  if (!idea) return <p className="muted">Il taccuino è ancora vuoto: le tue idee torneranno qui.</p>;
+  if (!idea) return <p className="muted">Le note sono ancora vuote: le tue idee torneranno qui.</p>;
   return (
     <div className="stack">
       <div className="ritorno">

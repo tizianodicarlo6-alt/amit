@@ -60,6 +60,8 @@ const longDate = (ts) =>
 export default function NoteEditor({ idea = null, trackId: initialTrack = null, onClose, start = null }) {
   const [id, setId] = useState(idea?.id || null);
   const [text, setText] = useState(idea?.text || start?.text || '');
+  const [title, setTitle] = useState(idea?.title || start?.title || '');
+  const titleRef = useRef(null);
   const [tags, setTags] = useState(idea?.tags || []);
   const [trackId, setTrackId] = useState(idea?.trackId ?? initialTrack);
   const [beatId, setBeatId] = useState(idea?.beatId || start?.beatId || null);
@@ -104,7 +106,7 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
   const timer = useRef(0);
   const saving = useRef(Promise.resolve());
   const latest = useRef({});
-  latest.current = { text, tags, trackId, beatId, loop };
+  latest.current = { text, title, tags, trackId, beatId, loop };
   const idRef = useRef(id);
   idRef.current = id;
 
@@ -113,13 +115,13 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
     clearTimeout(timer.current);
     saving.current = saving.current.then(async () => {
       const v = latest.current;
-      const data = { text: v.text.trim() ? v.text : '', tags: v.tags, trackId: v.trackId, beatId: v.beatId, loop: v.loop };
+      const data = { text: v.text.trim() ? v.text : '', title: v.title.trim(), tags: v.tags, trackId: v.trackId, beatId: v.beatId, loop: v.loop };
       if (!idRef.current) {
-        if (!v.text.trim()) return;
+        if (!v.text.trim() && !v.title.trim()) return;
         const nid = await addIdea({ type: 'text', text: data.text, tags: data.tags, trackId: data.trackId });
         idRef.current = nid;
         setId(nid);
-        await updateIdea(nid, { beatId: data.beatId, loop: data.loop });
+        await updateIdea(nid, { title: data.title, beatId: data.beatId, loop: data.loop });
       } else await updateIdea(idRef.current, data);
     });
     return saving.current;
@@ -127,18 +129,18 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
   useEffect(() => {
     clearTimeout(timer.current);
     timer.current = setTimeout(saveNow, 500);
-  }, [text, tags, trackId, beatId, loop]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [text, title, tags, trackId, beatId, loop]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     document.body.classList.add('no-scroll');
-    if (!idea) setTimeout(() => taRef.current?.focus(), 50);
+    if (!idea && start?.text) setTimeout(() => taRef.current?.focus(), 50);
     return () => document.body.classList.remove('no-scroll');
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const close = async () => {
     await saveNow();
     // nota rimasta vuota: non la tengo (come l'app Note)
-    if (idRef.current && !latest.current.text.trim()) await deleteIdea(idRef.current);
+    if (idRef.current && !latest.current.text.trim() && !latest.current.title.trim()) await deleteIdea(idRef.current);
     onClose();
   };
 
@@ -151,8 +153,8 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
   };
 
   const toTrack = async () => {
-    const title = text.trim().split('\n')[0].slice(0, 40) || 'Nuova traccia';
-    const tid = await addTrack({ title });
+    const tTitle = title.trim() || text.trim().split('\n')[0].slice(0, 40) || 'Nuova traccia';
+    const tid = await addTrack({ title: tTitle });
     setTrackId(tid);
     latest.current.trackId = tid;
     await saveNow();
@@ -164,7 +166,7 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
     <div className="note-page" role="dialog" aria-label="Nota">
       <header className="note-head">
         <button className="note-back" onClick={close}>
-          <Icon name="back" size={22} /> Taccuino
+          <Icon name="back" size={22} /> Note
         </button>
         {left != null && <span className={`flash-timer${left === 0 ? ' done' : ''}`}>{left === 0 ? 'Tempo! 🔥' : `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`}</span>}
         <span className="grow" />
@@ -186,6 +188,17 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
       <div className="note-body">
         {beat && <BeatLoop beat={beat} region={loop} onRegion={setLoop} caption={beat.title} />}
         <div className="note-date">{longDate(created)}</div>
+        <input
+          ref={titleRef}
+          autoFocus={!idea && !start?.text}
+          className="note-title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), taRef.current?.focus())}
+          placeholder="Titolo"
+          autoCapitalize="sentences"
+          enterKeyHint="next"
+        />
         {(tags.length > 0 || trackId) && (
           <button className="note-meta" onClick={() => setSheet('info')}>
             {tags.map((t) => `#${t}`).join(' ')}

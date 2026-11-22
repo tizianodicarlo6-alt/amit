@@ -109,7 +109,7 @@ export default function HomePage() {
       <div className="quick">
         <button className="quick-btn primary" onClick={() => openCapture({ mode: 'text' })}>
           <Icon name="pen" size={26} />
-          <span>Scrivi un'idea</span>
+          <span>Nuova nota</span>
         </button>
         <button className="quick-btn" onClick={() => openCapture({ mode: 'voice' })}>
           <Icon name="mic" size={26} />
@@ -137,7 +137,7 @@ export default function HomePage() {
 
       {ideas.length > 0 && (
         <>
-          <SectionHead title="Ultime idee" to="/taccuino" />
+          <SectionHead title="Ultime note" to="/taccuino" />
           <div className="list">
             {ideas.map((i) => (
               <IdeaCard key={i.id} idea={i} onClick={() => navigate('/taccuino')} />

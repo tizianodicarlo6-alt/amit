@@ -330,7 +330,7 @@ export default function TracciaPage() {
   const step = stepPick ?? (track.beatId ? 'testo' : 'beat');
   const goStudio = () => navigate(`/studio/${track.id}`);
   const remove = async () => {
-    if (!confirm(`Eliminare la traccia "${track.title}"? Le idee collegate restano nel taccuino.`)) return;
+    if (!confirm(`Eliminare la traccia "${track.title}"? Le idee collegate restano nelle note.`)) return;
     await deleteTrack(id);
     navigate('/tracce');
   };

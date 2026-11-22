@@ -25,7 +25,7 @@ export default function BottomNav() {
   return (
     <nav className="bottom-nav" aria-label="Navigazione principale">
       <Item to="/home" icon="home" label="Home" />
-      <Item to="/taccuino" icon="taccuino" label="Taccuino" />
+      <Item to="/taccuino" icon="taccuino" label="Note" />
       {profile ? (
         <button className="nav-sphere" onClick={() => setInsp(true)} aria-label="Ispirazione">
           <span className="sphere" />

@@ -125,7 +125,7 @@ export default function CatenaPage() {
 
           <div className="row">
             <button className="btn primary grow" onClick={save} disabled={!shown.some((l) => l.trim()) || saved}>
-              {saved ? '✓ Nel taccuino' : 'Salva nel taccuino'}
+              {saved ? '✓ Nelle note' : 'Salva nelle note'}
             </button>
             <button className="btn" onClick={another}>
               Un'altra parola

@@ -182,7 +182,7 @@ export default function ParliamonePage() {
                     <button className="btn primary grow" onClick={startTrackFromMap}>
                       ✍️ Inizia la traccia
                     </button>
-                    <button className="btn" onClick={async () => (await addIdea({ type: 'text', text: mapText(v.map), tags: ['mappa'] }), alert('Salvata nel taccuino'))}>
+                    <button className="btn" onClick={async () => (await addIdea({ type: 'text', text: mapText(v.map), tags: ['mappa'] }), alert('Salvata nelle note'))}>
                       Salva
                     </button>
                   </div>

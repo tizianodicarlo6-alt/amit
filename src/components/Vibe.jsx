@@ -77,7 +77,7 @@ export function SpuntoCard({ vibe, onUse }) {
         </button>
         {onUse && (
           <button className="btn sm ghost" onClick={() => onUse(sp)}>
-            Salva nel taccuino
+            Salva nelle note
           </button>
         )}
       </div>

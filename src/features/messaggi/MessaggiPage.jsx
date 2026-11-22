@@ -93,7 +93,7 @@ function Bubble({ m, mine, onDelete }) {
         {m.file_path && <RemoteAudio path={m.file_path} duration={p.duration} />}
         {!mine && (
           <button className="btn sm" onClick={() => doSave(saveIdea)} disabled={state === 'busy' || state === 'ok'}>
-            {state === 'ok' ? '✓ Nel tuo taccuino' : 'Salva nel taccuino'}
+            {state === 'ok' ? '✓ Nelle tue note' : 'Salva nelle note'}
           </button>
         )}
       </>

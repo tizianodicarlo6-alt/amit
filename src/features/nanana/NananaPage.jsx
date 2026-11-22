@@ -99,7 +99,7 @@ export default function NananaPage() {
     if (!text) return alert('Scrivi prima qualche parola sotto le frasi.');
     const id = await addIdea({ type: 'text', text, tags: ['nanana'] });
     await updateIdea(id, { beatId: beat?.id || null, loop: s.region || null });
-    alert('Salvata nel taccuino');
+    alert('Salvata nelle note');
   };
 
   const toTrack = async () => {

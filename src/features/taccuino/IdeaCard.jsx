@@ -17,6 +17,7 @@ export default function IdeaCard({ idea, trackTitle, onClick, actions }) {
         )}
       </div>
       {idea.type === 'voice' && <AudioPlayer audioId={idea.audioId} duration={idea.duration} />}
+      {idea.title && <div className="idea-title">{idea.title}</div>}
       {idea.text && <p className="idea-text">{idea.text}</p>}
       {idea.tags?.length > 0 && (
         <div className="chips small">
