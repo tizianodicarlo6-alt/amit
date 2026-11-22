@@ -10,7 +10,7 @@ const readPos = () => {
     return null;
   }
 };
-const HIDE = ['/nanana', '/studio', '/bozza', '/messaggi', '/parliamone', '/allenamento'];
+const HIDE = ['/nanana', '/studio', '/bozza', '/messaggi', '/parliamone', '/allenamento', '/butta'];
 
 // La pallina dei nanana: sempre a portata di dito. Si sposta trascinandola.
 export default function NananaBall() {

@@ -768,3 +768,10 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .ghost-text { font-size: 18px; font-style: italic; color: rgba(255, 255, 255, .62); line-height: 1.4; }
 .ghost-actions { display: flex; gap: 6px; margin-top: 10px; }
 @keyframes ghostin { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.insp-tile.wide { min-height: 0; width: 100%; }
+.butta { padding-bottom: calc(40px + var(--safe-b)); }
+.butta-text { min-height: 42vh; font-size: 17px; line-height: 1.5; resize: none; }
+.sis-group { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-left: 3px solid #4c9aff; border-radius: 4px; background: var(--surface); margin-bottom: 6px; }
+.sis-row { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; font-size: 16px; }
+.sis-row input { width: 20px; height: 20px; margin-top: 2px; flex: none; }
+.nobeat-card { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; color: var(--text); margin-bottom: 10px; }

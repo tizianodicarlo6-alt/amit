@@ -213,7 +213,7 @@ function Steps({ step, setStep, track, takeCount, onStudio }) {
       {items.map((it) => {
         const on = it.id === 'testo' ? step === 'testo' || step === 'beat' : false;
         return (
-          <button key={it.id} className={`step${on ? ' on' : ''}${it.done ? ' done' : ''}`} onClick={() => (it.id === 'studio' ? onStudio() : setStep(track.beatId ? 'testo' : 'beat'))}>
+          <button key={it.id} className={`step${on ? ' on' : ''}${it.done ? ' done' : ''}`} onClick={() => (it.id === 'studio' ? onStudio() : setStep('testo'))}>
             <span className="step-n">{it.done && !on ? '✓' : it.id === 'testo' ? '✎' : '●'}</span>
             <span>{it.label}</span>
           </button>
@@ -324,13 +324,13 @@ export default function TracciaPage() {
   const project = useMemo(() => projects.find((p) => p.id === track?.projectId), [projects, track]);
   // il passo iniziale si decide una volta sola (poi cambia solo quando lo scegli tu)
   useEffect(() => {
-    if (track && stepPick == null) setStep(track.beatId ? 'testo' : 'beat');
+    if (track && stepPick == null) setStep('testo');
   }, [track, stepPick]);
 
   if (track === undefined) return <div className="page" />;
   if (!track) return <div className="page empty">Traccia non trovata.</div>;
 
-  const step = stepPick ?? (track.beatId ? 'testo' : 'beat');
+  const step = stepPick ?? 'testo';
   const goStudio = () => navigate(`/studio/${track.id}`);
   const remove = async () => {
     if (!confirm(`Eliminare la traccia "${track.title}"? Le idee collegate restano nelle note.`)) return;
@@ -363,11 +363,18 @@ export default function TracciaPage() {
       )}
 
       {step === 'beat' && <BeatStep track={track} onNext={() => setStep('testo')} />}
-      {step === 'testo' && track.beatId && (
-        <button className="beat-change" onClick={() => setStep('beat')}>
-          Cambia beat
-        </button>
-      )}
+      {step === 'testo' &&
+        (track.beatId ? (
+          <button className="beat-change" onClick={() => setStep('beat')}>
+            Cambia beat
+          </button>
+        ) : (
+          <button className="card nobeat-card" onClick={() => setStep('beat')}>
+            <Icon name="beat" size={20} />
+            <span className="grow">Scegli il beat su cui scrivere</span>
+            <span className="muted small">facoltativo</span>
+          </button>
+        ))}
       {step === 'testo' && (
         <div className="wob">
           <WriteOnBeat track={track} />

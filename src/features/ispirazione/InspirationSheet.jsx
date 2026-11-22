@@ -112,6 +112,11 @@ export default function InspirationSheet({ onClose, openCapture }) {
     <Sheet open onClose={onClose} title={TITLES[view]}>
       {view === 'menu' && (
         <div className="stack insp">
+          <button className="insp-tile wide" onClick={() => (onClose(), navigate('/butta'))}>
+            <span className="insp-sym">≋</span>
+            <b>Butta tutto</b>
+            <span className="muted small">Metti il beat e butta dentro tutto a caso: poi lo sistemo io</span>
+          </button>
           <div className="insp-grid">
             {[
               ['ritorno', '↺', 'Idee che ritornano', 'Una tua vecchia nota o un vocale'],
