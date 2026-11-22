@@ -1,7 +1,19 @@
 // Amit · il ponte verso l'assistente gratuito (Groq). La chiave resta qui, nascosta.
 // Supabase → Edge Functions → nome: parliamone. Segreto richiesto: GROQ_API_KEY (facoltativo: GROQ_MODEL).
 const KEY = Deno.env.get("GROQ_API_KEY") || "";
-const MODEL = Deno.env.get("GROQ_MODEL") || "llama-3.3-70b-versatile";
+let model = Deno.env.get("GROQ_MODEL") || "";
+
+// Il modello: quello scelto nel segreto GROQ_MODEL, altrimenti il migliore tra quelli che Groq offre oggi
+const PREFER = [/gpt-oss-120b/, /llama-4-maverick/, /llama-3\.3-70b/, /qwen.*32b/, /llama-4-scout/, /70b|120b/, /gpt-oss/];
+async function pickModel(force = false): Promise<string> {
+  if (model && !force) return model;
+  const r = await fetch("https://api.groq.com/openai/v1/models", { headers: { Authorization: `Bearer ${KEY}` } });
+  if (!r.ok) throw new Error(`modelli ${r.status}`);
+  const ids: string[] = ((await r.json())?.data || []).map((m: { id: string }) => m.id).filter((id: string) => !/whisper|guard|tts|vision|embed|distil|compound|prompt/i.test(id));
+  model = PREFER.map((re) => ids.find((id) => re.test(id))).find(Boolean) || ids[0] || "";
+  if (!model) throw new Error("nessun modello disponibile");
+  return model;
+}
 const MEMBERS = ["kraken", "shower"];
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -69,17 +81,26 @@ Deno.serve(async (req) => {
   if (JSON.stringify(messages).length > 60000) return json({ error: "Chiacchierata troppo lunga: iniziane una nuova." }, 400);
 
   const wantsJson = mode !== "chat";
-  const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${KEY}` },
-    body: JSON.stringify({
-      model: MODEL,
+  const call = async (m: string) =>
+    await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${KEY}` },
+      body: JSON.stringify({
+        model: m,
       temperature: mode === "chat" ? 0.8 : 0.5,
       max_tokens: mode === "chat" ? 400 : 700,
       messages: [{ role: "system", content: PROMPTS[mode](ctx) }, ...messages],
-      ...(wantsJson ? { response_format: { type: "json_object" } } : {}),
-    }),
-  });
+        ...(wantsJson ? { response_format: { type: "json_object" } } : {}),
+      }),
+    });
+  let r: Response;
+  try {
+    r = await call(await pickModel());
+    if (r.status === 404 || r.status === 400) r = await call(await pickModel(true)); // modello sparito: ne scelgo un altro
+  } catch {
+    return json({ error: "Non riesco a raggiungere l'assistente." }, 502);
+  }
+  if (r.status === 401) return json({ error: "La chiave GROQ_API_KEY su Supabase non è valida." }, 500);
   if (r.status === 429) return json({ error: "Per oggi l'assistente gratuito ha finito le risposte: riprova piu' tardi." }, 429);
   if (!r.ok) return json({ error: `Assistente non disponibile (${r.status}).` }, 502);
   const data = await r.json();

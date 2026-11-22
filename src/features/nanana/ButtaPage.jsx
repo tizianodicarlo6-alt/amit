@@ -1,3 +1,4 @@
+import { CLOUD } from '../../config.js';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
@@ -68,7 +69,7 @@ export default function ButtaPage() {
   const askAi = async () => {
     setAi({ busy: true });
     try {
-      const r = await callFunction('parliamone', { mode: 'sistema', text: s.text || '', context: { name: profile?.name, style: profile?.style } });
+      const r = await callFunction(CLOUD.assistant, { mode: 'sistema', text: s.text || '', context: { name: profile?.name, style: profile?.style } });
       setAi(r.data || {});
     } catch (e) {
       setAi({ error: e.message || 'Assistente non disponibile.' });

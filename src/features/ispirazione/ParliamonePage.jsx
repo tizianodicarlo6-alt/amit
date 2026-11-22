@@ -1,3 +1,4 @@
+import { CLOUD } from '../../config.js';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
@@ -107,7 +108,7 @@ export default function ParliamonePage() {
     setBusy('chat');
     setErr('');
     try {
-      const r = await callFunction('parliamone', { mode: 'chat', context: next.context, messages: api });
+      const r = await callFunction(CLOUD.assistant, { mode: 'chat', context: next.context, messages: api });
       setConv({ ...next, api: [...api, { role: 'assistant', content: r.text }], view: [...next.view, { who: 'ai', text: r.text }] });
     } catch (e) {
       setErr(navigator.onLine === false ? 'Sei offline: per parlare con l\'assistente serve internet.' : e.message);
@@ -121,7 +122,7 @@ export default function ParliamonePage() {
     setBusy('map');
     setErr('');
     try {
-      const r = await callFunction('parliamone', { mode: 'map', context: conv.context, messages: conv.api });
+      const r = await callFunction(CLOUD.assistant, { mode: 'map', context: conv.context, messages: conv.api });
       const map = r.data || {};
       setConv({ ...conv, map, view: [...conv.view, { who: 'map', map }] });
     } catch (e) {

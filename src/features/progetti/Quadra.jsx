@@ -1,3 +1,4 @@
+import { CLOUD } from '../../config.js';
 import { useState } from 'react';
 import { updateTrack } from '../../db/db.js';
 import { sectionLabel } from '../../constants.js';
@@ -24,7 +25,7 @@ export default function Quadra({ track, activeId }) {
   const askAi = async (s) => {
     setAi({ busy: true });
     try {
-      const r = await callFunction('parliamone', { mode: 'strade', text: s.text, context: { tema: q.tema || '', rit: q.rit || '' } });
+      const r = await callFunction(CLOUD.assistant, { mode: 'strade', text: s.text, context: { tema: q.tema || '', rit: q.rit || '' } });
       setAi({ strade: r.data?.strade || [] });
     } catch (e) {
       setAi({ error: e.message || 'Assistente non disponibile.' });
