@@ -40,11 +40,11 @@ export default function InspirationSheet({ onClose, openCapture }) {
     <Sheet open onClose={onClose} title={view === 'menu' ? 'Ispirazione' : view === 'spunto' ? 'Spunto veloce' : 'Vai sul beat'}>
       {view === 'menu' && (
         <div className="stack insp">
-          <button className="insp-card soon" disabled>
+          <button className="insp-card" onClick={() => (onClose(), navigate('/parliamone'))}>
             <span className="insp-ico">💬</span>
             <span className="grow">
               <b>Parliamone</b>
-              <span className="muted small">Una chiacchierata per capire dove vuoi andare a parare. Arriva presto.</span>
+              <span className="muted small">Una chiacchierata per capire dove vuoi andare a parare. Poi ti preparo la mappa del pezzo.</span>
             </span>
           </button>
           <button className="insp-card" onClick={() => setView('spunto')}>

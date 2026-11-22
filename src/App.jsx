@@ -12,6 +12,7 @@ import BeatPage from './features/beat/BeatPage.jsx';
 import StudioPage from './features/studio/StudioPage.jsx';
 import SketchPage from './features/bozza/SketchPage.jsx';
 import MessaggiPage from './features/messaggi/MessaggiPage.jsx';
+import ParliamonePage from './features/ispirazione/ParliamonePage.jsx';
 import { useEffect } from 'react';
 import { useProfile } from './lib/profile.js';
 import { startCloud } from './lib/cloud.js';
@@ -46,6 +47,7 @@ export default function App() {
               <Route path="/studio/:id" element={<StudioPage />} />
               <Route path="/bozza/:id" element={<SketchPage />} />
               <Route path="/messaggi" element={<MessaggiPage />} />
+              <Route path="/parliamone" element={<ParliamonePage />} />
               {/* Prossimamente: /allenamento */}
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>

@@ -16,6 +16,7 @@ import { SpuntoCard, VibePicker, spuntoText } from '../../components/Vibe.jsx';
 import { atmoOf, vibeLabel } from '../../lib/spunti.js';
 import { useProfile } from '../../lib/profile.js';
 import ShareSheet from '../messaggi/ShareSheet.jsx';
+import { MapCard } from '../ispirazione/ParliamonePage.jsx';
 import IdeaCard from '../taccuino/IdeaCard.jsx';
 import IdeaSheet from '../taccuino/IdeaSheet.jsx';
 import BeatStep from './BeatStep.jsx';
@@ -350,6 +351,12 @@ export default function TracciaPage() {
 
       <Steps step={step} setStep={setStep} track={track} takeCount={takeCount} onStudio={goStudio} />
       <VibeBar track={track} />
+      {track.mappa && (
+        <details className="map-details">
+          <summary>🧭 La mappa del pezzo</summary>
+          <MapCard map={track.mappa} />
+        </details>
+      )}
 
       {step === 'beat' && <BeatStep track={track} onNext={() => setStep('testo')} />}
       {step === 'testo' && (

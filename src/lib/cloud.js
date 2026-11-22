@@ -189,3 +189,20 @@ export async function downloadFile(path) {
     );
   return fileCache.get(path);
 }
+
+/** Chiama una funzione online (es. l'assistente "parliamone"). */
+export async function callFunction(name, body) {
+  const sb = await cloud();
+  const { data, error } = await sb.functions.invoke(name, { body });
+  if (error) {
+    let msg = error.message;
+    try {
+      const j = await error.context?.json?.();
+      if (j?.error) msg = j.error;
+    } catch {
+      /* ignorato */
+    }
+    throw new Error(msg);
+  }
+  return data;
+}
