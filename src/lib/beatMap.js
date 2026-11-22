@@ -138,12 +138,15 @@ export function beatMap(x, sr, { bpm, anchor = 0 }) {
     g.full = mean(g.segs.map((s) => s.full));
     g.bars = g.segs.reduce((p, s) => p + s.bars, 0);
   }
-  // il ritornello è il tipo più pieno; se c'è un tipo solo è tutto strofa (meglio onesti)
+  // il ritornello è il tipo più pieno, ma deve sembrare un ritornello: pezzi da 4-12 battute,
+  // che tornano (o almeno 8 battute) e non metà del beat. Se nessuno lo sembra: tutto strofa (meglio onesti)
+  const loudBars = groups.reduce((p, g) => p + g.bars, 0);
+  const canBeRit = (g) => g.segs.every((x) => x.bars <= 12) && (g.segs.length >= 2 || g.bars >= 8) && g.bars <= loudBars * 0.6;
   let ritGroup = null;
   if (groups.length >= 2) {
-    const byFull = [...groups].sort((p, q) => q.full - p.full);
+    const byFull = groups.filter(canBeRit).sort((p, q) => q.full - p.full);
+    ritGroup = byFull[0] || null;
     // tra due quasi uguali scelgo quello che torna di più a pezzi corti (8 battute)
-    ritGroup = byFull[0];
     if (byFull[1] && byFull[0].full - byFull[1].full < 0.3) {
       const shortness = (g) => g.segs.length / Math.max(1, g.bars / 8);
       if (shortness(byFull[1]) > shortness(byFull[0])) ritGroup = byFull[1];
@@ -208,4 +211,32 @@ export function splitMap(map, idx, barDur) {
   const a = { ...s, end: mid, bars: half };
   const b = { ...s, start: mid, bars: bars - half, kind: s.kind === 'rit' ? 'strofa' : s.kind === 'strofa' ? 'rit' : s.kind };
   return labelMap([...map.slice(0, idx), a, b, ...map.slice(idx + 1)]);
+}
+
+/**
+ * Correzione a mano: "questo pezzo (da `from` a `to` secondi) è un ritornello".
+ * Taglia i pezzi che ci cadono sopra e unisce i vicini dello stesso tipo.
+ */
+export function assignRange(map, from, to, kind, barDur = 0) {
+  if (!(to > from)) return map;
+  const r2 = (t) => Math.round(t * 100) / 100;
+  const out = [];
+  for (const s of map) {
+    if (s.end <= from || s.start >= to) {
+      out.push({ ...s });
+      continue;
+    }
+    if (s.start < from - 0.05) out.push({ ...s, end: r2(from) });
+    if (s.end > to + 0.05) out.push({ ...s, start: r2(to) });
+  }
+  out.push({ start: r2(from), end: r2(to), kind });
+  out.sort((a, b) => a.start - b.start);
+  const bars = (s) => (barDur ? Math.max(1, Math.round((s.end - s.start) / barDur)) : s.bars);
+  const merged = [];
+  for (const s of out) {
+    const last = merged[merged.length - 1];
+    if (last && last.kind === s.kind && Math.abs(last.end - s.start) < 0.1) last.end = s.end;
+    else merged.push({ ...s });
+  }
+  return labelMap(merged.map((s) => ({ ...s, bars: bars(s) })));
 }

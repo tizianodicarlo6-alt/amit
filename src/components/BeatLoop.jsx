@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Icon from './Icon.jsx';
 import { db, updateBeat } from '../db/db.js';
-import { MAP_KINDS, beatMap, mapKindName, setMapKind, splitMap } from '../lib/beatMap.js';
+import { MAP_KINDS, assignRange, beatMap, mapKindName } from '../lib/beatMap.js';
 import { encodeWav } from '../lib/wav.js';
 import { computePeaks, toAnalysisSamples } from '../lib/audio.js';
 import { detectAttack } from '../lib/analysis.js';
@@ -9,7 +9,7 @@ import { makeGrid, moveRegion, regionFromDrag, regionLabel, resizeRegion } from 
 
 // beat decodificati (per non rifarlo ogni volta che apri la pagina)
 const cache = new Map();
-const MAP_V = 2; // versione della mappa del beat
+const MAP_V = 3; // versione della mappa del beat
 export async function decodeBeat(audioId) {
   if (cache.has(audioId)) return cache.get(audioId);
   const p = (async () => {
@@ -58,7 +58,6 @@ const HANDLE = 22; // px: quanto vicino al bordo per allargare
  */
 export default function BeatLoop({ beat, region, onRegion, marks = [], caption, attack: knownAttack = null, overlay = null, children, pauseSignal = 0 }) {
   const [fixing, setFixing] = useState(false); // correggo la mappa a mano
-  const [fixSel, setFixSel] = useState(null);
   const [decoded, setDecoded] = useState(null);
   const [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -264,9 +263,9 @@ export default function BeatLoop({ beat, region, onRegion, marks = [], caption, 
   };
 
   const pct = (t) => `${(t / (duration || 1)) * 100}%`;
-  const fixMap = (m, sel) => {
-    updateBeat(beat.id, { map: m, mapEdited: true });
-    setFixSel(sel);
+  const fixMap = (kind) => {
+    if (!region) return;
+    updateBeat(beat.id, { map: assignRange(beat.map, region.from, Math.min(region.to, duration), kind, (4 * 60) / beat.bpm), mapEdited: true });
   };
   const bars = grid.barDur ? Math.floor((duration - grid.anchor) / grid.barDur) : 0;
 
@@ -290,38 +289,34 @@ export default function BeatLoop({ beat, region, onRegion, marks = [], caption, 
         <>
           <div className="bl-maprow">
             <div className="bl-map" aria-label="Mappa del beat">
-              {beat.map.map((m, i) => (
+              {beat.map.map((m) => (
                 <button
                   key={m.start}
-                  className={`bl-sec k-${m.kind}${fixing ? (fixSel === i ? ' on' : '') : region && Math.abs(region.from - m.start) < 0.05 && Math.abs(region.to - m.end) < 0.05 ? ' on' : ''}`}
+                  className={`bl-sec k-${m.kind}${region && Math.abs(region.from - m.start) < 0.05 && Math.abs(region.to - m.end) < 0.05 ? ' on' : ''}`}
                   style={{ left: pct(m.start), width: pct(m.end - m.start) }}
-                  onClick={() => (fixing ? setFixSel(i) : onRegion({ from: m.start, to: Math.min(m.end, duration) }))}
+                  onClick={() => onRegion({ from: m.start, to: Math.min(m.end, duration) })}
                   title={fixing ? `Correggi ${m.label}` : `Loop su ${m.label}`}
                 >
                   {m.label}
                 </button>
               ))}
             </div>
-            <button className={`bl-fix${fixing ? ' on' : ''}`} onClick={() => (setFixing(!fixing), setFixSel(null))} aria-label="Correggi la mappa">
+            <button className={`bl-fix${fixing ? ' on' : ''}`} onClick={() => setFixing(!fixing)} aria-label="Correggi la mappa">
               {fixing ? 'Fine' : 'Correggi'}
             </button>
           </div>
           {fixing && (
             <div className="bl-fixbar">
-              {fixSel == null || !beat.map[fixSel] ? (
-                <span className="muted small">Tocca un pezzo della mappa per cambiarlo.</span>
+              {!region ? (
+                <span className="muted small">Trascina il dito sul beat per scegliere un pezzo (o tocca un pezzo della mappa), poi dimmi cos'è.</span>
               ) : (
                 <>
+                  <span className="small bl-fixq">{regionLabel(region, grid)} è:</span>
                   {MAP_KINDS.map((k) => (
-                    <button key={k} className={`chip sm${beat.map[fixSel].kind === k ? ' on' : ''}`} onClick={() => fixMap(setMapKind(beat.map, fixSel, k), null)}>
+                    <button key={k} className="chip sm" onClick={() => fixMap(k)}>
                       {mapKindName(k)}
                     </button>
                   ))}
-                  {(beat.map[fixSel].bars || 0) >= 2 && (
-                    <button className="chip sm" onClick={() => fixMap(splitMap(beat.map, fixSel, (4 * 60) / beat.bpm), fixSel)}>
-                      ✂ Dividi
-                    </button>
-                  )}
                 </>
               )}
             </div>

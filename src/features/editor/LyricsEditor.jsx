@@ -26,7 +26,7 @@ const writePref = (k, v) => {
     /* ignorato */
   }
 };
-const readMode = () => {
+export const readMode = () => {
   try {
     return localStorage.getItem('q.rimeMode') || 'rime';
   } catch {
@@ -41,7 +41,35 @@ const MODES = [
   ['multi', 'Multi'],
 ];
 
-function ModePicker({ value, onChange }) {
+/** Analisi delle rime del testo nel modo scelto. */
+export const rhymeAnalysis = (text, mode) => (mode === 'multi' ? { mode: 'multi', colors: multiColors(text, RHYME_COLORS.length), stats: {} } : analyzeRhymes(text, mode, RHYME_COLORS.length));
+
+/** Il conteggio sotto la barra: gruppi di rime, assonanze, multisillabiche. */
+export function RhymeLegend({ mode, analysis }) {
+  if (mode === 'off') return null;
+  if (mode === 'multi')
+    return (
+      <div className="rhyme-legend muted small">
+        <span>
+          <span className="rhyme" style={{ '--rc': RHYME_COLORS[0] }}>multisillabiche</span> {analysis.colors.size} {analysis.colors.size === 1 ? 'gruppo' : 'gruppi'} · stesse vocali sulle ultime 3+ sillabe, anche dentro la riga
+        </span>
+      </div>
+    );
+  return (
+    <div className="rhyme-legend muted small">
+      <span>
+        <span className="rhyme" style={{ '--rc': RHYME_COLORS[0] }}>rima</span> {analysis.stats.rime} {analysis.stats.rime === 1 ? 'gruppo' : 'gruppi'}
+      </span>
+      {mode === 'assonanze' && (
+        <span>
+          <span className="rhyme ass" style={{ '--rc': RHYME_COLORS[1] }}>assonanza</span> {analysis.stats.assonanze} {analysis.stats.assonanze === 1 ? 'gruppo' : 'gruppi'}
+        </span>
+      )}
+    </div>
+  );
+}
+
+export function ModePicker({ value, onChange }) {
   return (
     <div className="segmented" role="radiogroup" aria-label="Evidenzia">
       {MODES.map(([id, label]) => (
@@ -63,7 +91,7 @@ function Toggle({ on, onChange, label }) {
 }
 
 // Una riga "disegnata" sotto al campo di testo: parole colorate + sillabe.
-const Line = memo(function Line({ line, analysis, showRhymes, showSyllables, target, header }) {
+export const Line = memo(function Line({ line, analysis, showRhymes, showSyllables, target, header }) {
   if (header) return <div className={`lyr-line lyr-headline${header.active ? ' on' : ''}`}>{line}</div>;
   const syl = showSyllables && line.trim() ? countLineSyllables(line) : null;
   let content;

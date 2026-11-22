@@ -12,6 +12,16 @@ import { quartine } from '../../lib/fuoco.js';
 import { setResume } from '../../lib/resume.js';
 import { addBars, logEvent } from '../../lib/stats.js';
 import GhostBar, { insertGhostLine, useGhost } from '../../components/GhostBar.jsx';
+import { Line, ModePicker, RhymeLegend, readMode, rhymeAnalysis } from '../editor/LyricsEditor.jsx';
+
+const FIRE_KEY = 'amit.note.fuoco';
+const readFire = () => {
+  try {
+    return localStorage.getItem(FIRE_KEY) !== '0';
+  } catch {
+    return true;
+  }
+};
 
 /** Il fuoco: una barra verticale con 4 tacche; dopo ogni quartina il fuoco sale fin dove è arrivata (1-4). */
 function FireBar({ level, count }) {
@@ -111,6 +121,28 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
   const quarts = useMemo(() => (profile ? quartine(text, { rank }) : []), [text, rank, profile]);
   const lastQ = quarts[quarts.length - 1];
   const caret = useRef(0);
+  // 🔥 il fuoco si accende e spegne dal tasto in alto
+  const [fireOn, setFireOn] = useState(readFire);
+  const toggleFire = () => {
+    const v = !fireOn;
+    setFireOn(v);
+    try {
+      localStorage.setItem(FIRE_KEY, v ? '1' : '0');
+    } catch {
+      /* ignorato */
+    }
+  };
+  // rime colorate e conteggio, come nel testo della traccia
+  const [mode, setMode] = useState(readMode);
+  const analysis = useMemo(() => (mode === 'off' ? null : rhymeAnalysis(text, mode)), [text, mode]);
+  const changeMode = (v) => {
+    setMode(v);
+    try {
+      localStorage.setItem('q.rimeMode', v);
+    } catch {
+      /* ignorato */
+    }
+  };
   // 👻 bloccato da ~3 minuti sulla stessa riga: una tua vecchia barra
   const caretLine = text.slice(0, caret.current || text.length).split('\n').length - 1;
   const ghost = useGhost({ lines: text.split('\n'), at: caretLine, exclude: id });
@@ -190,6 +222,11 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
         <button className="btn sm ghost" onPointerDown={(e) => e.preventDefault()} onClick={() => setRimario(wordAt(text, caret.current))}>
           Rimario
         </button>
+        {profile && (
+          <button className={`icon-btn fire-tg${fireOn ? ' on' : ''}`} onClick={toggleFire} aria-label={fireOn ? 'Spegni il fuoco' : 'Accendi il fuoco'} aria-pressed={fireOn}>
+            🔥
+          </button>
+        )}
         <button className={`icon-btn${beatId ? ' on' : ''}`} onClick={() => setSheet('beat')} aria-label="Scrivi su un beat">
           <Icon name="beat" size={22} />
         </button>
@@ -201,7 +238,7 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
         </button>
       </header>
 
-      {profile && text.trim() && <FireBar level={lastQ?.level || 0} count={quarts.length} />}
+      {profile && fireOn && text.trim() && <FireBar level={lastQ?.level || 0} count={quarts.length} />}
       <div className="note-body">
         {beat && <BeatLoop beat={beat} region={loop} onRegion={setLoop} caption={beat.title} />}
         <div className="note-date">{longDate(created)}</div>
@@ -222,7 +259,27 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
             {trackId ? `${tags.length ? ' · ' : ''}🔗 collegata a una traccia` : ''}
           </button>
         )}
-        <textarea ref={taRef} className="note-text" value={text} onChange={(e) => setText(e.target.value)} onSelect={(e) => (caret.current = e.target.selectionStart)} placeholder="Scrivi la barra, il concetto, l'immagine…" autoCapitalize="sentences" />
+        <div className="note-rhymes">
+          <ModePicker value={mode} onChange={changeMode} />
+          {analysis && <RhymeLegend mode={mode} analysis={analysis} />}
+        </div>
+        <div className={`lyr note-lyr${fireOn && profile ? ' with-fire' : ''}`}>
+          <div className="lyr-back" aria-hidden="true">
+            {text.split('\n').map((l, i) => (
+              <Line key={i} line={l} analysis={analysis || {}} showRhymes={!!analysis} showSyllables={false} />
+            ))}
+          </div>
+          <textarea
+            ref={taRef}
+            className="lyr-input"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onSelect={(e) => (caret.current = e.target.selectionStart)}
+            placeholder="Scrivi la barra, il concetto, l'immagine…"
+            autoCapitalize="sentences"
+            spellCheck={false}
+          />
+        </div>
       </div>
 
       {sharing && <ShareSheet kind="idea" item={{ type: 'text', text, tags }} onClose={() => setSharing(false)} />}

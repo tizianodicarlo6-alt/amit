@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { beatMap, labelMap, setMapKind, splitMap } from './beatMap.js';
+import { assignRange, beatMap, labelMap, setMapKind, splitMap } from './beatMap.js';
 
 // beat finto a 120 BPM: intro (solo melodia) 4 · strofa 8 · rit (più pieno) 8 · strofa 8 · rit 8 · outro 4
 function fakeBeat(sr) {
@@ -87,4 +87,21 @@ test('mappa: correzioni a mano', () => {
   assert.deepEqual(s.map((x) => [x.kind, x.start, x.bars]), [['intro', 0, 4], ['strofa', 8, 8], ['rit', 24, 8], ['rit', 40, 8]].map(([k, st, b]) => [k, st, b]).slice(0, 4));
   const k = setMapKind(m, 0, 'strofa');
   assert.deepEqual(k.map((x) => [x.kind, x.bars]), [['strofa', 20], ['rit', 8]]);
+});
+
+test('mappa: un pezzo lungo e pieno non è un ritornello', () => {
+  const plan = [['intro', 4], ['verse', 4], ['chorus', 40]];
+  const { x, sr } = synth({ plan, bpm: 140, sr: 16000 });
+  assert.ok(!beatMap(x, sr, { bpm: 140 }).some((s) => s.kind === 'rit'));
+});
+
+test('mappa: scegli un pezzo col dito e dici cos\'è', () => {
+  const m = labelMap([
+    { start: 0, end: 8, kind: 'intro', bars: 4 },
+    { start: 8, end: 72, kind: 'rit', bars: 32 },
+  ]);
+  const a = assignRange(m, 8, 40, 'strofa', 2);
+  assert.deepEqual(a.map((s) => [s.kind, s.start, s.end, s.bars]), [['intro', 0, 8, 4], ['strofa', 8, 40, 16], ['rit', 40, 72, 16]]);
+  const b = assignRange(a, 56, 72, 'strofa', 2);
+  assert.deepEqual(b.map((s) => s.label), ['Intro', 'Strofa 1', 'Rit', 'Strofa 2']);
 });
