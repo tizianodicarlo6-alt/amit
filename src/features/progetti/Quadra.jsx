@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { updateTrack } from '../../db/db.js';
 import { sectionLabel } from '../../constants.js';
+import { callFunction, useCloud } from '../../lib/cloud.js';
 
 // Strade concrete per andare avanti dopo l'attacco (quando arriva "e mo' che dico?")
 export const STRADE = [
@@ -18,6 +19,17 @@ export const STRADE = [
 export default function Quadra({ track, activeId }) {
   const q = track.quadra || {};
   const [open, setOpen] = useState(!q.tema);
+  const cloudState = useCloud();
+  const [ai, setAi] = useState(null); // { busy } | { strade } | { error }
+  const askAi = async (s) => {
+    setAi({ busy: true });
+    try {
+      const r = await callFunction('parliamone', { mode: 'strade', text: s.text, context: { tema: q.tema || '', rit: q.rit || '' } });
+      setAi({ strade: r.data?.strade || [] });
+    } catch (e) {
+      setAi({ error: e.message || 'Assistente non disponibile.' });
+    }
+  };
   const set = (c) => updateTrack(track.id, { quadra: { ...q, ...c } });
   const setDir = (id, v) => set({ dir: { ...(q.dir || {}), [id]: v } });
   const strofe = (track.sections || []).filter((s) => s.type !== 'ritornello');
@@ -79,6 +91,17 @@ export default function Quadra({ track, activeId }) {
                   </button>
                 ))}
               </div>
+              {cloudState.user && !ai?.strade && (
+                <button className="btn sm" onClick={() => askAi(s)} disabled={ai?.busy}>
+                  {ai?.busy ? <span className="spinner" /> : '◌'} Strade su misura (assistente)
+                </button>
+              )}
+              {ai?.error && <p className="error small">{ai.error}</p>}
+              {ai?.strade?.map((t) => (
+                <button key={t} className="strada-ai" onClick={() => (setDir(s.id, t), setAi(null))}>
+                  {t}
+                </button>
+              ))}
             </div>
           )}
         </div>

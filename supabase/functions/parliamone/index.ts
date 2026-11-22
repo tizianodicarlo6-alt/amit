@@ -1,8 +1,7 @@
-// Amit · "Parliamone": il ponte tra l'app e l'assistente (Claude). La chiave resta qui, nascosta.
-// Supabase → Edge Functions → nome: parliamone. Segreto richiesto: ANTHROPIC_API_KEY.
-import Anthropic from "npm:@anthropic-ai/sdk@1.12.0";
-
-const client = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") });
+// Amit · il ponte verso l'assistente gratuito (Groq). La chiave resta qui, nascosta.
+// Supabase → Edge Functions → nome: parliamone. Segreto richiesto: GROQ_API_KEY (facoltativo: GROQ_MODEL).
+const KEY = Deno.env.get("GROQ_API_KEY") || "";
+const MODEL = Deno.env.get("GROQ_MODEL") || "llama-3.3-70b-versatile";
 const MEMBERS = ["kraken", "shower"];
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -11,91 +10,84 @@ const cors = {
 };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
-// chi sta chiamando (Supabase ha già controllato la firma del token)
+// chi sta chiamando (Supabase ha gia' controllato la firma del token)
 function memberOf(req: Request): string | null {
   try {
     const token = (req.headers.get("Authorization") || "").replace("Bearer ", "");
-    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
-    const [id, domain] = String(payload.email || "").split("@");
+    const p = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    const [id, domain] = String(p.email || "").split("@");
     return domain === "amit-studio.app" && MEMBERS.includes(id) ? id : null;
   } catch {
     return null;
   }
 }
 
-// Il prompt di sistema dipende solo da chi sei e dal "colore" scelto all'inizio: resta identico per tutta la chiacchierata.
-function systemPrompt(ctx: { name?: string; style?: string; vibe?: string }) {
-  return `Sei "Parliamone", l'assistente di scrittura dell'app Amit di Amit Studio, uno studio di registrazione rap.
-Parli con ${ctx.name || "un rapper"}, che sta cercando di capire cosa vuole dire nel suo prossimo pezzo.${ctx.style ? `\nIl suo modo di scrivere: ${ctx.style}` : ""}${ctx.vibe ? `\nPer questo pezzo ha scelto: ${ctx.vibe}.` : ""}
+const BASE = (ctx: { name?: string; style?: string }) =>
+  `Sei l'assistente di scrittura dell'app Amit di Amit Studio, uno studio di registrazione rap italiano. Parli con ${ctx.name || "un rapper"}.` +
+  (ctx.style ? ` Il suo modo di scrivere: ${ctx.style}` : "") +
+  ` Parli sempre in italiano, in modo amichevole e diretto, come un amico che fa musica. Non scrivi mai barre, rime o strofe al posto suo: il testo lo scrive lui.`;
 
-Il tuo compito: aiutarlo a tirare fuori i concetti, gli argomenti e le immagini di quello che sente, soprattutto quando è confuso o bloccato.
-- Parla in italiano, in modo amichevole e diretto, come un amico che fa musica. Frasi brevi.
-- Fai UNA domanda alla volta, concreta (fatti, persone, luoghi, momenti, sensazioni fisiche), partendo da quello che ti ha appena detto.
-- Rimanda indietro in poche parole quello che hai capito, così lui si sente capito e va più a fondo.
-- Non scrivere barre, rime o strofe al posto suo: il testo lo scrive lui. Puoi suggerire un'immagine o una parola chiave se aiuta.
-- Se ti chiede di scrivere il testo, ricordagli con leggerezza che qui lavorate sul "cosa dire", e fagli una domanda che lo aiuti a trovarlo.
-- Risposte corte: al massimo 3-4 frasi più la domanda.`;
-}
-
-const MAP_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["tema", "concetti", "immagini", "parole", "ritornello", "titoli"],
-  properties: {
-    tema: { type: "string", description: "Il tema centrale del pezzo in una frase" },
-    concetti: { type: "array", items: { type: "string" }, description: "3-5 concetti o argomenti da sviluppare nelle strofe" },
-    immagini: { type: "array", items: { type: "string" }, description: "Immagini e metafore uscite dai suoi discorsi" },
-    parole: { type: "array", items: { type: "string" }, description: "Parole chiave" },
-    ritornello: { type: "string", description: "Il concetto del ritornello (non il testo)" },
-    titoli: { type: "array", items: { type: "string" }, description: "3 titoli possibili" },
-  },
+const PROMPTS: Record<string, (c: any) => string> = {
+  chat: (c) =>
+    BASE(c) +
+    ` Il tuo compito: aiutarlo a capire cosa vuole dire nel prossimo pezzo, soprattutto quando e' confuso o bloccato. Fai UNA domanda alla volta, concreta (fatti, persone, luoghi, momenti, sensazioni), partendo da quello che ti ha appena detto. Rimanda in poche parole quello che hai capito. Risposte corte: massimo 3-4 frasi piu' la domanda.`,
+  map: (c) =>
+    BASE(c) +
+    ` Tira le fila della chiacchierata e rispondi SOLO con un oggetto JSON con queste chiavi: "tema" (una frase), "concetti" (3-5 frasi brevi), "immagini" (3-6), "parole" (5-10 parole chiave), "ritornello" (il concetto, non il testo), "titoli" (3). Usa le sue parole e le sue immagini.`,
+  sistema: (c) =>
+    BASE(c) +
+    ` Ti arriva un testo buttato a caso sul beat. Rispondi SOLO con un oggetto JSON: "tema" (di cosa sta parlando, una frase), "concetti" (3-5 argomenti che emergono), "titoli" (3 titoli possibili). Non riscrivere le sue frasi.`,
+  strade: (c) =>
+    BASE(c) +
+    ` Ha scritto l'attacco di una strofa e non sa dove andare. Rispondi SOLO con un oggetto JSON: "strade" = 3 direzioni concrete per continuare (ognuna una frase che dice COSA raccontare, non come scriverlo), coerenti con il tema e il ritornello.`,
 };
-
-const MAP_ASK =
-  "Tira le fila di tutto quello che ci siamo detti: tema centrale, concetti per le strofe, immagini e metafore, parole chiave, il concetto del ritornello e 3 titoli. Usa le mie parole e le mie immagini quando puoi. Non scrivere barre.";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "Metodo non permesso" }, 405);
-  const who = memberOf(req);
-  if (!who) return json({ error: "Solo per i soci di Amit Studio." }, 403);
+  if (!memberOf(req)) return json({ error: "Solo per i soci di Amit Studio." }, 403);
+  if (!KEY) return json({ error: "Manca la chiave dell'assistente (GROQ_API_KEY) su Supabase." }, 500);
 
-  let body: { context?: { name?: string; style?: string; vibe?: string }; messages?: Anthropic.Beta.BetaMessageParam[]; mode?: string };
+  let body: { mode?: string; context?: Record<string, string>; messages?: { role: string; content: string }[]; text?: string };
   try {
     body = await req.json();
   } catch {
     return json({ error: "Richiesta non valida" }, 400);
   }
-  const messages = Array.isArray(body.messages) ? body.messages : [];
-  if (!messages.length || messages.length > 80) return json({ error: "Chiacchierata troppo lunga: iniziane una nuova." }, 400);
-  if (JSON.stringify(messages).length > 200_000) return json({ error: "Chiacchierata troppo lunga: iniziane una nuova." }, 400);
+  const mode = PROMPTS[body.mode || "chat"] ? body.mode || "chat" : "chat";
+  const ctx = body.context || {};
+  let messages: { role: string; content: string }[] = [];
+  if (mode === "chat" || mode === "map") {
+    messages = (body.messages || []).filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string").slice(-40);
+    if (!messages.length) return json({ error: "Scrivi qualcosa per iniziare." }, 400);
+    if (mode === "map") messages.push({ role: "user", content: "Tira le fila di tutto quello che ci siamo detti." });
+  } else {
+    const t = String(body.text || "").slice(0, 6000);
+    if (!t.trim()) return json({ error: "Testo vuoto." }, 400);
+    messages = [{ role: "user", content: mode === "strade" ? `Tema: ${ctx.tema || "?"}\nRitornello: ${ctx.rit || "?"}\nStrofa finora:\n${t}` : t }];
+  }
+  if (JSON.stringify(messages).length > 60000) return json({ error: "Chiacchierata troppo lunga: iniziane una nuova." }, 400);
 
-  const map = body.mode === "map";
-  const all: Anthropic.Beta.BetaMessageParam[] = map ? [...messages, { role: "user", content: MAP_ASK }] : messages;
-
+  const wantsJson = mode !== "chat";
+  const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${KEY}` },
+    body: JSON.stringify({
+      model: MODEL,
+      temperature: mode === "chat" ? 0.8 : 0.5,
+      max_tokens: mode === "chat" ? 400 : 700,
+      messages: [{ role: "system", content: PROMPTS[mode](ctx) }, ...messages],
+      ...(wantsJson ? { response_format: { type: "json_object" } } : {}),
+    }),
+  });
+  if (r.status === 429) return json({ error: "Per oggi l'assistente gratuito ha finito le risposte: riprova piu' tardi." }, 429);
+  if (!r.ok) return json({ error: `Assistente non disponibile (${r.status}).` }, 502);
+  const data = await r.json();
+  const text = String(data?.choices?.[0]?.message?.content || "").trim();
+  if (!wantsJson) return json({ text });
   try {
-    const response = await client.beta.messages.create({
-      model: "claude-opus-5-5",
-      max_tokens: map ? 8000 : 4000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      cache_control: { type: "ephemeral" },
-      system: systemPrompt(body.context || {}),
-      output_config: map ? { effort: "medium", format: { type: "json_schema", schema: MAP_SCHEMA } } : { effort: "low" },
-      messages: all,
-    });
-    if (response.stop_reason === "refusal") return json({ refusal: true, text: "Su questo non riesco ad aiutarti. Proviamo da un'altra parte?" });
-    const text = response.content
-      .filter((b) => b.type === "text")
-      .map((b) => (b as { text: string }).text)
-      .join("\n")
-      .trim();
-    // content va rimandato com'è al prossimo giro (insieme ai blocchi di ragionamento)
-    return json({ content: response.content, text, appended: map ? MAP_ASK : null, usage: response.usage });
-  } catch (e) {
-    if (e instanceof Anthropic.RateLimitError) return json({ error: "Troppe richieste: riprova tra un minuto." }, 429);
-    if (e instanceof Anthropic.AuthenticationError) return json({ error: "Chiave dell'assistente non valida o mancante." }, 500);
-    if (e instanceof Anthropic.APIError) return json({ error: `Assistente non disponibile (${e.status}).` }, 502);
-    return json({ error: "Assistente non raggiungibile." }, 502);
+    return json({ data: JSON.parse(text) });
+  } catch {
+    return json({ error: "Risposta non valida, riprova." }, 502);
   }
 });

@@ -11,7 +11,10 @@ import { CloudLogin } from '../messaggi/MessaggiPage.jsx';
 const KEY = 'amit.parliamone';
 const load = () => {
   try {
-    return JSON.parse(localStorage.getItem(KEY)) || null;
+    const c = JSON.parse(localStorage.getItem(KEY)) || null;
+    // chiacchierate della versione di prova vecchia: si ricomincia
+    if (c?.api?.some((m) => typeof m.content !== 'string')) return null;
+    return c;
   } catch {
     return null;
   }
@@ -104,9 +107,8 @@ export default function ParliamonePage() {
     setBusy('chat');
     setErr('');
     try {
-      const r = await callFunction('parliamone', { context: next.context, messages: api });
-      if (r.refusal) setConv({ ...next, api: c.api, view: [...next.view, { who: 'ai', text: r.text }] });
-      else setConv({ ...next, api: [...api, { role: 'assistant', content: r.content }], view: [...next.view, { who: 'ai', text: r.text }] });
+      const r = await callFunction('parliamone', { mode: 'chat', context: next.context, messages: api });
+      setConv({ ...next, api: [...api, { role: 'assistant', content: r.text }], view: [...next.view, { who: 'ai', text: r.text }] });
     } catch (e) {
       setErr(navigator.onLine === false ? 'Sei offline: per parlare con l\'assistente serve internet.' : e.message);
       setConv(conv); // la domanda non è partita: torno a prima
@@ -119,10 +121,9 @@ export default function ParliamonePage() {
     setBusy('map');
     setErr('');
     try {
-      const r = await callFunction('parliamone', { context: conv.context, messages: conv.api, mode: 'map' });
-      if (r.refusal) throw new Error(r.text);
-      const map = JSON.parse(r.text);
-      setConv({ ...conv, api: [...conv.api, { role: 'user', content: r.appended }, { role: 'assistant', content: r.content }], map, view: [...conv.view, { who: 'map', map }] });
+      const r = await callFunction('parliamone', { mode: 'map', context: conv.context, messages: conv.api });
+      const map = r.data || {};
+      setConv({ ...conv, map, view: [...conv.view, { who: 'map', map }] });
     } catch (e) {
       setErr(e.message || 'Non sono riuscito a tirare le fila.');
     }

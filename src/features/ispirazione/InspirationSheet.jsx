@@ -118,6 +118,11 @@ export default function InspirationSheet({ onClose, openCapture }) {
             <b>Butta tutto</b>
             <span className="muted small">Metti il beat e butta dentro tutto a caso: poi lo sistemo io</span>
           </button>
+          <button className="insp-tile wide" onClick={() => (onClose(), navigate('/parliamone'))}>
+            <span className="insp-sym">◌</span>
+            <b>Parliamone</b>
+            <span className="muted small">Una chiacchierata per capire cosa vuoi dire, poi la mappa del pezzo</span>
+          </button>
           <div className="insp-grid">
             {[
               ['ritorno', '↺', 'Idee che ritornano', 'Una tua vecchia nota o un vocale'],

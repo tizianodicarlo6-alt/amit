@@ -7,6 +7,8 @@ import { addIdea, addTrack, db, newId, updateIdea, updateTrack } from '../../db/
 import { loadRank } from '../../lib/rimario.js';
 import { sistema } from '../../lib/sistema.js';
 import { logEvent } from '../../lib/stats.js';
+import { callFunction, useCloud } from '../../lib/cloud.js';
+import { useProfile } from '../../lib/profile.js';
 
 const KEY = 'amit.butta';
 const load = () => {
@@ -35,12 +37,16 @@ export default function ButtaPage() {
   const [res, setRes] = useState(null);
   const [pick, setPick] = useState(new Set());
   const [rank, setRank] = useState(null);
+  const [ai, setAi] = useState(null); // { busy } | { tema, concetti, titoli } | { error }
+  const cloudState = useCloud();
+  const profile = useProfile();
   const taRef = useRef(null);
   useEffect(() => {
     loadRank().then(setRank).catch(() => {});
   }, []);
 
   const run = () => {
+    setAi(null);
     const r = sistema(s.text || '', { rank });
     setRes(r);
     setPick(new Set([...r.coppie.flat(), ...r.buone]));
@@ -58,7 +64,16 @@ export default function ButtaPage() {
     for (const f of res.buone) if (pick.has(f) && !out.includes(f)) out.push(f);
     return out;
   };
-  const titleOf = () => res.temi[0]?.parola ? res.temi[0].parola[0].toUpperCase() + res.temi[0].parola.slice(1) : 'Butta tutto';
+  const titleOf = () => ai?.titoli?.[0] || (res.temi[0]?.parola ? res.temi[0].parola[0].toUpperCase() + res.temi[0].parola.slice(1) : 'Butta tutto');
+  const askAi = async () => {
+    setAi({ busy: true });
+    try {
+      const r = await callFunction('parliamone', { mode: 'sistema', text: s.text || '', context: { name: profile?.name, style: profile?.style } });
+      setAi(r.data || {});
+    } catch (e) {
+      setAi({ error: e.message || 'Assistente non disponibile.' });
+    }
+  };
 
   const toNote = async () => {
     const lines = chosen();
@@ -188,6 +203,34 @@ export default function ButtaPage() {
                       </span>
                     ))}
                   </div>
+                </div>
+              )}
+              {cloudState.user && !ai && (
+                <button className="btn" onClick={askAi}>
+                  ◌ Di cosa sto parlando? (assistente)
+                </button>
+              )}
+              {ai?.busy && (
+                <p className="muted small">
+                  <span className="spinner" /> Ci penso…
+                </p>
+              )}
+              {ai?.error && <p className="error small">{ai.error}</p>}
+              {ai?.tema && (
+                <div className="map-card">
+                  <div className="map-tema">{ai.tema}</div>
+                  {ai.concetti?.length > 0 && (
+                    <div className="map-row">
+                      <span className="sp-lab">Concetti</span>
+                      <span>{ai.concetti.join(' · ')}</span>
+                    </div>
+                  )}
+                  {ai.titoli?.length > 0 && (
+                    <div className="map-row">
+                      <span className="sp-lab">Titoli</span>
+                      <span>{ai.titoli.join(' / ')}</span>
+                    </div>
+                  )}
                 </div>
               )}
               {!res.coppie.length && !res.buone.length && <p className="muted">Ancora troppo poco per sistemare: butta qualche frase in più.</p>}
