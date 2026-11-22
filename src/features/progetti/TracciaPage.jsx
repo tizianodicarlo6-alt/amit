@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTapTempo } from '../../components/useTapTempo.js';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { setResume } from '../../lib/resume.js';
 import { useDbQuery } from '../../db/useDbQuery.js';
 import { addIdea, db, deleteTake, deleteTrack, updateIdea, updateTake, updateTrack } from '../../db/db.js';
 import { STATUSES, formatDate, formatTime, roleLabel, sectionLabel } from '../../constants.js';
@@ -254,7 +255,15 @@ function VibeBar({ track }) {
 // La zona scelta mentre scrivi una sezione resta legata a quella sezione (e allo studio: "parte qui").
 function WriteOnBeat({ track }) {
   const beat = useDbQuery(() => (track.beatId ? db.beats.get(track.beatId).then((b) => b ?? null) : Promise.resolve(null)), [track.beatId], undefined);
-  const [active, setActive] = useState(null);
+  const [params] = useSearchParams();
+  const [active, setActive] = useState(() => params.get('sez') || null);
+  // ricordo dove sei, per "Riprendi da dove eri" nella home
+  useEffect(() => {
+    const sec = (track.sections || []).find((x) => x.id === active);
+    setResume({ kind: 'track', id: track.id, title: track.title || 'Senza titolo', sec: active, secLabel: sec ? sectionLabel(sec.type) : null });
+    if (active) setTimeout(() => document.querySelector(`[data-sec="${active}"]`)?.scrollIntoView({ block: 'center' }), 300);
+  }, [active, track.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [free, setFree] = useState(null);
   const [overlay, setOverlay] = useState(null);
   const [pauseSig, setPauseSig] = useState(0);

@@ -233,7 +233,7 @@ export default function LyricsEditor({ track, onFocusSection, activeId, targets 
         seen[s.type] = (seen[s.type] || 0) + 1;
         const bars = s.text.split('\n').filter((l) => l.trim()).length;
         return (
-          <section key={s.id} className={`lyr-section type-${s.type}${activeId === s.id ? ' active' : ''}`}>
+          <section key={s.id} data-sec={s.id} className={`lyr-section type-${s.type}${activeId === s.id ? ' active' : ''}`}>
             <div className="lyr-head">
               <select className="section-select" value={s.type} onChange={(e) => update(s.id, { type: e.target.value })} aria-label="Tipo di sezione">
                 {SECTION_TYPES.map((t) => (

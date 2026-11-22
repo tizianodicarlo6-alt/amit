@@ -8,6 +8,8 @@ import IdeaCard from '../taccuino/IdeaCard.jsx';
 import { STUDIO, whatsappLink } from '../../config.js';
 import { personalGreeting, useProfile } from '../../lib/profile.js';
 import { levelOf } from '../../lib/progress.js';
+import { getResume } from '../../lib/resume.js';
+import { sectionLabel } from '../../constants.js';
 import { useCloud } from '../../lib/cloud.js';
 
 // Home dei soci: saluto personale e "che pezzo vuoi scrivere?"
@@ -34,6 +36,23 @@ function greeting() {
   if (h < 13) return 'Buongiorno';
   if (h < 19) return 'Buon pomeriggio';
   return 'Buonasera';
+}
+
+// "Riprendi da dove eri": l'ultimo pezzo aperto, un tocco e sei lì
+function ResumeCard() {
+  const navigate = useNavigate();
+  const r = getResume();
+  const item = useDbQuery(() => (r ? (r.kind === 'track' ? db.tracks.get(r.id) : db.ideas.get(r.id)).then((x) => x || null) : Promise.resolve(null)), [r?.id], null);
+  if (!r || !item) return null;
+  const sec = r.kind === 'track' ? (item.sections || []).find((x) => x.id === r.sec) : null;
+  const go = () => navigate(r.kind === 'track' ? `/traccia/${r.id}${r.sec ? `?sez=${r.sec}` : ''}` : `/taccuino?apri=${r.id}`);
+  return (
+    <button className="card resume-card" onClick={go}>
+      <span className="resume-k">Riprendi da dove eri</span>
+      <span className="resume-t ellipsis">{item.title || r.title}</span>
+      <span className="muted small">{r.kind === 'track' ? `Traccia${sec ? ` · ${sectionLabel(sec.type)}` : ''}` : 'Nota'}</span>
+    </button>
+  );
 }
 
 function SectionHead({ title, to }) {
@@ -105,6 +124,8 @@ export default function HomePage() {
         )}
       </section>
       )}
+
+      <ResumeCard />
 
       <div className="quick">
         <button className="quick-btn primary" onClick={() => openCapture({ mode: 'text' })}>

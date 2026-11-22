@@ -9,6 +9,7 @@ import BeatLoop from '../../components/BeatLoop.jsx';
 import RhymeSheet from '../../components/RhymeSheet.jsx';
 import { loadRank, wordAt } from '../../lib/rimario.js';
 import { quartine } from '../../lib/fuoco.js';
+import { setResume } from '../../lib/resume.js';
 import GhostBar, { insertGhostLine, useGhost } from '../../components/GhostBar.jsx';
 
 /** Il fuoco: una barra verticale con 4 tacche; dopo ogni quartina il fuoco sale fin dove è arrivata (1-4). */
@@ -67,6 +68,10 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
   const [trackId, setTrackId] = useState(idea?.trackId ?? initialTrack);
   const [beatId, setBeatId] = useState(idea?.beatId || start?.beatId || null);
   const [loop, setLoop] = useState(idea?.loop || start?.loop || null);
+  // ricordo questa nota per "Riprendi da dove eri"
+  useEffect(() => {
+    if (id) setResume({ kind: 'note', id, title: title.trim() || text.trim().split('\n')[0].slice(0, 40) || 'Nota' });
+  }, [id, title]); // eslint-disable-line react-hooks/exhaustive-deps
   // sessione flash: conto alla rovescia
   const [endsAt] = useState(() => (start?.timer ? Date.now() + start.timer * 60000 : null));
   const [left, setLeft] = useState(start?.timer ? start.timer * 60 : null);
