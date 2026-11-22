@@ -6,6 +6,52 @@ import Icon from '../../components/Icon.jsx';
 import TrackCard from '../progetti/TrackCard.jsx';
 import IdeaCard from '../taccuino/IdeaCard.jsx';
 import { STUDIO, whatsappLink } from '../../config.js';
+import { useState } from 'react';
+import { personalGreeting, setPrefs, useProfile } from '../../lib/profile.js';
+import { SpuntoCard, VibePicker, spuntoText } from '../../components/Vibe.jsx';
+import { vibeLabel } from '../../lib/spunti.js';
+import { addIdea } from '../../db/db.js';
+import { startTrack } from '../ispirazione/InspirationSheet.jsx';
+
+// Home dei soci: saluto personale e "che pezzo vuoi scrivere?"
+function MemberHero({ profile }) {
+  const navigate = useNavigate();
+  const g = personalGreeting(profile.name);
+  const [vibe, setVibe] = useState(() => profile.prefs?.vibe || {});
+  const [showSp, setShowSp] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const change = (v) => {
+    setVibe(v);
+    setPrefs({ vibe: v, atmo: v.atmo || null });
+  };
+  return (
+    <section className="member-hero">
+      <p className="hero-greet">{g.hello}</p>
+      <h1 className="hero-title">{g.question}</h1>
+      <p className="muted small">{g.sub}</p>
+      <VibePicker value={vibe} onChange={change} />
+      <div className="row">
+        <button className="btn primary grow" onClick={() => startTrack(navigate, { vibe })}>
+          ✍️ Inizia a scrivere
+        </button>
+        <button className={`btn${showSp ? ' on' : ''}`} onClick={() => setShowSp(!showSp)}>
+          💡 Spunto
+        </button>
+      </div>
+      {vibeLabel(vibe) && <p className="muted small center">{vibeLabel(vibe)}</p>}
+      {showSp && (
+        <SpuntoCard
+          vibe={vibe}
+          onUse={async (sp) => {
+            await addIdea({ type: 'text', text: spuntoText(sp), tags: ['spunto'] });
+            setSaved(true);
+          }}
+        />
+      )}
+      {saved && <p className="ok small">✓ Salvato nel taccuino</p>}
+    </section>
+  );
+}
 
 const logo = `${import.meta.env.BASE_URL}logo-bianco.png`;
 
@@ -32,6 +78,7 @@ function SectionHead({ title, to }) {
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const profile = useProfile();
   const { openCapture } = useCapture();
   const tracks = useDbQuery(() => db.tracks.orderBy('updatedAt').reverse().toArray(), [], []) || [];
   const ideas = useDbQuery(() => db.ideas.orderBy('createdAt').reverse().limit(3).toArray(), [], []) || [];
@@ -56,6 +103,9 @@ export default function HomePage() {
         </Link>
       </header>
 
+      {profile ? (
+        <MemberHero profile={profile} />
+      ) : (
       <section className="hero">
         <img src={logo} alt="Logo Amit Studio" className="hero-logo" />
         <p className="hero-greet">{greeting()}</p>
@@ -74,6 +124,7 @@ export default function HomePage() {
           </p>
         )}
       </section>
+      )}
 
       <div className="quick">
         <button className="quick-btn primary" onClick={() => openCapture({ mode: 'text' })}>
@@ -128,6 +179,7 @@ export default function HomePage() {
             </div>
           </Link>
         )}
+        {!profile && (
         <div className="card studio-card">
           <img src={logo} alt="" className="studio-logo" />
           <div className="studio-text">
@@ -139,6 +191,7 @@ export default function HomePage() {
             <Icon name="whatsapp" /> Prenota su WhatsApp
           </a>
         </div>
+        )}
       </div>
 
       <p className="muted small center footer-note">Amit · by {STUDIO.name}</p>

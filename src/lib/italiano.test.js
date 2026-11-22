@@ -51,3 +51,16 @@ test('assonanze', () => {
   assert.ok(a.exact.has(rhymeKey('notte')));
   assert.ok(!a.exact.has(rhymeKey('sole')));
 });
+
+test('vocali delle sillabe e multisillabiche', async () => {
+  const { vowelSeq, multiKeys, multiColors, tokenizeLine } = await import('./italiano.js');
+  assert.deepEqual(vowelSeq('fantasma'), ['a', 'a', 'a']);
+  assert.deepEqual(vowelSeq('ciao'), ['a', 'o']);
+  assert.deepEqual(vowelSeq('aiuto'), ['a', 'u', 'o']);
+  // "sotto casa" e "molto rara" non rimano perfette ma hanno le stesse vocali: (o)-o-a-a
+  const k1 = multiKeys(tokenizeLine('ci vediamo sotto casa')).at(-1);
+  const k2 = multiKeys(tokenizeLine('una cosa molto rara')).at(-1);
+  assert.equal(k1.mkey, k2.mkey);
+  assert.equal(tokenizeLine('ci vediamo sotto casa')[k1.from].text, 'sotto'); // la rima parte da "sotto"
+  assert.equal(multiColors('ci vediamo sotto casa\nuna cosa molto rara\nniente').size, 1);
+});

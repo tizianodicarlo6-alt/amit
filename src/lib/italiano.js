@@ -235,3 +235,58 @@ export function analyzeRhymes(text, mode = 'rime', paletteSize = 12) {
   };
   return { colors, exact, groupKey, stats };
 }
+
+// ---------- Vocali delle sillabe e rime multisillabiche ----------
+
+const plainV = (c) => ({ à: 'a', è: 'e', é: 'e', ì: 'i', í: 'i', ò: 'o', ó: 'o', ù: 'u', ú: 'u' })[c] || c;
+
+/** Le vocali "che si sentono", una per sillaba: "fantasma" → ['a','a','a'], "ciao" → ['a','o']. */
+export function vowelSeq(word) {
+  const s = phonetic(word);
+  const out = [];
+  for (const g of vowelGroups(s)) {
+    const n = syllablesInGroup(g.text);
+    const strong = [...g.text].filter((c) => STRONG.has(c));
+    if (n === 1) out.push(plainV(strong[0] || g.text.at(-1)));
+    else if (strong.length === n) out.push(...strong.map(plainV));
+    else {
+      // "a-iu-to": la prima forte e poi l'ultima del gruppo
+      const parts = [strong[0] || g.text[0]];
+      for (let k = 1; k < n; k++) parts.push(g.text.at(-1));
+      out.push(...parts.map(plainV));
+    }
+  }
+  return out;
+}
+
+/**
+ * Chiavi multisillabiche di una riga (parti di tokenizeLine): per ogni parola "piena",
+ * le ultime vocali della riga fino a lì (almeno 3, e almeno quelle dalla tonica in poi).
+ * Ritorna per ogni parte { mkey, from } (from = indice della parte dove inizia la rima).
+ */
+export function multiKeys(parts) {
+  const seq = []; // { v, part }
+  return parts.map((p, i) => {
+    if (p.key == null && !/[a-zàèéìòù]/i.test(p.text)) return { mkey: null, from: i };
+    for (const v of vowelSeq(p.text)) seq.push({ v, part: i });
+    if (!p.akey) return { mkey: null, from: i };
+    const n = Math.max(3, p.akey.length);
+    if (seq.length < n) return { mkey: null, from: i };
+    const tail = seq.slice(-n);
+    return { mkey: tail.map((x) => x.v).join(''), from: tail[0].part };
+  });
+}
+
+/** Colori delle rime multisillabiche in tutto il testo: Map(chiave → colore) per chi compare ≥ 2 volte. */
+export function multiColors(text, paletteSize = 12) {
+  const counts = new Map();
+  for (const line of text.split('\n')) {
+    const seen = new Set();
+    for (const { mkey } of multiKeys(tokenizeLine(line))) {
+      if (!mkey || seen.has(mkey)) continue;
+      seen.add(mkey);
+      counts.set(mkey, (counts.get(mkey) || 0) + 1);
+    }
+  }
+  return colorMap(counts, paletteSize);
+}

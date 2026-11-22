@@ -6,6 +6,53 @@ import { db, getMeta } from '../../db/db.js';
 import { createBackup, importBackup, markBackupDone } from '../../db/backup.js';
 import { formatDate } from '../../constants.js';
 import Icon from '../../components/Icon.jsx';
+import { enterCode, logout, useProfile } from '../../lib/profile.js';
+
+// Area soci: il codice personale rende l'app tua (su questo telefono)
+function MemberArea() {
+  const profile = useProfile();
+  const [code, setCode] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    setBusy(true);
+    setErr('');
+    try {
+      const p = await enterCode(code);
+      if (!p) setErr('Codice non valido.');
+      else setCode('');
+    } catch {
+      setErr('Non riesco a controllare il codice su questo dispositivo.');
+    }
+    setBusy(false);
+  };
+  return (
+    <section className="card stack member">
+      <div className="reco-title">Area soci {STUDIO.name}</div>
+      {profile ? (
+        <>
+          <p className="muted small">
+            Sei entrato come <b>{profile.name}</b>. L'app è personalizzata per te su questo telefono.
+          </p>
+          <button className="btn sm ghost" onClick={() => confirm('Uscire? L\'app torna quella normale (i tuoi testi restano).') && logout()}>
+            Esci
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="muted small">Sei un socio? Inserisci il tuo codice personale.</p>
+          <div className="row">
+            <input className="input grow" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Codice" autoCapitalize="none" autoCorrect="off" onKeyDown={(e) => e.key === 'Enter' && go()} />
+            <button className="btn primary" onClick={go} disabled={!code.trim() || busy}>
+              Entra
+            </button>
+          </div>
+          {err && <p className="error small">{err}</p>}
+        </>
+      )}
+    </section>
+  );
+}
 
 const COMING = [
   { icon: 'studio', title: 'Studio', text: 'Registra la voce sopra al beat.', phase: 'Prossimamente' },
@@ -104,6 +151,7 @@ export default function AltroPage() {
         </Link>
         <h1>Impostazioni</h1>
       </header>
+      <MemberArea />
 
       <section className="card stack">
         <h2>Backup</h2>

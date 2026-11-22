@@ -1,6 +1,7 @@
 import Sheet from '../../components/Sheet.jsx';
 import Icon from '../../components/Icon.jsx';
 import { STUDIO, bookingLink } from '../../config.js';
+import { getProfile } from '../../lib/profile.js';
 import ExportRow, { slug } from './ExportRow.jsx';
 import { presetOf, FX_PRESETS } from './fx.js';
 
@@ -65,6 +66,7 @@ export default function MixSheet(p) {
           subtitle={`Beat + ${onCount} take con effetti ${preset ? `"${FX_PRESETS[preset].label}"` : 'personalizzati'}, in un unico file.`}
           prepare={prepMix}
         />
+        {!getProfile() && (
         <div className="card studio-card">
           <div className="studio-text">
             <div className="studio-kicker">{STUDIO.name}</div>
@@ -75,6 +77,7 @@ export default function MixSheet(p) {
             <Icon name="whatsapp" /> Prenota la sessione
           </a>
         </div>
+        )}
       </div>
     </Sheet>
   );

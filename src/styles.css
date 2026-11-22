@@ -576,3 +576,30 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .note-text::placeholder { color: #55555c; }
 .beat-pick { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 12px; padding: 12px 14px; font-weight: 700; }
 .beat-pick.on { border-color: #fff; }
+
+/* Sfera "Ispirazione" (soci) */
+.nav-sphere { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; margin-top: -30px; border: 0; background: none; color: var(--text); padding: 0; }
+.sphere { width: 64px; height: 64px; border-radius: 50%; border: 4px solid var(--bg); background: radial-gradient(circle at 32% 28%, rgba(255,255,255,0.95) 0 6%, var(--s1) 34%, var(--s2) 78%, #000 100%); box-shadow: 0 0 0 1px rgba(255,255,255,0.2), 0 0 26px color-mix(in srgb, var(--s1) 60%, transparent); animation: breathe 3.6s ease-in-out infinite; }
+.sphere-lab { font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.nav-sphere:active .sphere { transform: scale(0.92); }
+@keyframes breathe { 0%, 100% { transform: scale(1); filter: brightness(1); } 50% { transform: scale(1.06); filter: brightness(1.18); } }
+@media (prefers-reduced-motion: reduce) { .sphere { animation: none; } }
+.insp { gap: 10px; }
+.insp-card { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 16px; padding: 14px; }
+.insp-card .grow { display: flex; flex-direction: column; gap: 2px; }
+.insp-card.soon { opacity: .55; }
+.insp-ico { font-size: 26px; }
+.vibe { display: flex; flex-direction: column; gap: 10px; }
+.atmo-grid { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.atmo-grid::-webkit-scrollbar { display: none; }
+.atmo { flex: none; width: 108px; height: 64px; border-radius: 14px; border: 2px solid transparent; color: #fff; font-weight: 800; font-size: 13px; text-align: left; padding: 8px; display: flex; align-items: flex-end; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+.atmo.on { border-color: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,.25); }
+.spunto { display: flex; flex-direction: column; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px; }
+.sp-q { font-size: 18px; font-weight: 700; line-height: 1.35; }
+.sp-row { display: flex; gap: 8px; font-size: 14px; }
+.sp-lab { flex: none; width: 74px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding-top: 2px; }
+.member input { min-width: 0; }
+.vibe-bar { display: flex; align-items: center; gap: 8px; width: 100%; border: 1px solid var(--border); background: var(--surface); color: #fff; font-weight: 700; font-size: 14px; border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; text-align: left; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+.member-hero { display: flex; flex-direction: column; gap: 10px; padding: 8px 0 16px; }
+.member-hero .hero-title { margin: 0; }
+.member-hero .hero-greet { margin: 0; }

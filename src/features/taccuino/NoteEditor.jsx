@@ -6,6 +6,8 @@ import Sheet from '../../components/Sheet.jsx';
 import TagPicker from '../../components/TagPicker.jsx';
 import TrackPicker from '../../components/TrackPicker.jsx';
 import BeatLoop from '../../components/BeatLoop.jsx';
+import RhymeSheet from '../../components/RhymeSheet.jsx';
+import { wordAt } from '../../lib/rimario.js';
 import { useDbQuery } from '../../db/useDbQuery.js';
 import { addIdea, addTrack, db, deleteIdea, updateIdea } from '../../db/db.js';
 
@@ -24,6 +26,8 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
   const [beatId, setBeatId] = useState(idea?.beatId || null);
   const [loop, setLoop] = useState(idea?.loop || null);
   const [sheet, setSheet] = useState(null); // 'info' | 'beat'
+  const [rimario, setRimario] = useState(null);
+  const caret = useRef(0);
   const [created] = useState(idea?.createdAt || Date.now());
   const navigate = useNavigate();
   const beats = useDbQuery(() => db.beats.orderBy('createdAt').reverse().toArray(), [], []) || [];
@@ -95,6 +99,9 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
           <Icon name="back" size={22} /> Taccuino
         </button>
         <span className="grow" />
+        <button className="btn sm ghost" onPointerDown={(e) => e.preventDefault()} onClick={() => setRimario(wordAt(text, caret.current))}>
+          Rimario
+        </button>
         <button className={`icon-btn${beatId ? ' on' : ''}`} onClick={() => setSheet('beat')} aria-label="Scrivi su un beat">
           <Icon name="beat" size={22} />
         </button>
@@ -115,9 +122,10 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
             {trackId ? `${tags.length ? ' · ' : ''}🔗 collegata a una traccia` : ''}
           </button>
         )}
-        <textarea ref={taRef} className="note-text" value={text} onChange={(e) => setText(e.target.value)} placeholder="Scrivi la barra, il concetto, l'immagine…" autoCapitalize="sentences" />
+        <textarea ref={taRef} className="note-text" value={text} onChange={(e) => setText(e.target.value)} onSelect={(e) => (caret.current = e.target.selectionStart)} placeholder="Scrivi la barra, il concetto, l'immagine…" autoCapitalize="sentences" />
       </div>
 
+      {rimario && <RhymeSheet word={rimario.word} prev={rimario.prev} onClose={() => setRimario(null)} />}
       {sheet === 'beat' && (
         <Sheet open onClose={() => setSheet(null)} title="Scrivi su un beat">
           <div className="stack">

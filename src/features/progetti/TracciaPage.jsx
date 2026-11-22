@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTapTempo } from '../../components/useTapTempo.js';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useDbQuery } from '../../db/useDbQuery.js';
-import { db, deleteTake, deleteTrack, updateIdea, updateTake, updateTrack } from '../../db/db.js';
+import { addIdea, db, deleteTake, deleteTrack, updateIdea, updateTake, updateTrack } from '../../db/db.js';
 import { STATUSES, formatDate, formatTime, roleLabel, sectionLabel } from '../../constants.js';
 import AudioPlayer from '../../components/AudioPlayer.jsx';
 import Icon from '../../components/Icon.jsx';
@@ -11,6 +11,9 @@ import { useAutosave, SaveStatus } from '../../components/useAutosave.jsx';
 import { useCapture } from '../../components/CaptureContext.jsx';
 import LyricsEditor from '../editor/LyricsEditor.jsx';
 import BeatLoop from '../../components/BeatLoop.jsx';
+import { SpuntoCard, VibePicker, spuntoText } from '../../components/Vibe.jsx';
+import { atmoOf, vibeLabel } from '../../lib/spunti.js';
+import { useProfile } from '../../lib/profile.js';
 import IdeaCard from '../taccuino/IdeaCard.jsx';
 import IdeaSheet from '../taccuino/IdeaSheet.jsx';
 import BeatStep from './BeatStep.jsx';
@@ -213,6 +216,32 @@ function Steps({ step, setStep, track, takeCount, onStudio }) {
   );
 }
 
+// Intenzione · genere · atmosfera della traccia, con gli spunti
+function VibeBar({ track }) {
+  const profile = useProfile();
+  const [open, setOpen] = useState(false);
+  const v = track.vibe || {};
+  const a = atmoOf(v.atmo);
+  const label = vibeLabel(v);
+  if (!label && !profile) return null;
+  return (
+    <>
+      <button className="vibe-bar" onClick={() => setOpen(true)} style={a ? { background: `linear-gradient(90deg, ${a.color[0]}, ${a.color[1]})` } : undefined}>
+        <span className="grow ellipsis">{label || "Dai un'intenzione e un'atmosfera al pezzo"}</span>
+        <span>💡</span>
+      </button>
+      {open && (
+        <Sheet open onClose={() => setOpen(false)} title="Il colore del pezzo">
+          <div className="stack">
+            <SpuntoCard vibe={v} onUse={(sp) => addIdea({ type: 'text', text: spuntoText(sp), tags: ['spunto'], trackId: track.id })} />
+            <VibePicker value={v} onChange={(nv) => updateTrack(track.id, { vibe: nv })} />
+          </div>
+        </Sheet>
+      )}
+    </>
+  );
+}
+
 // ② Testo: il beat in alto (scegli col dito il pezzo da sentire in loop) e sotto il testo.
 // La zona scelta mentre scrivi una sezione resta legata a quella sezione (e allo studio: "parte qui").
 function WriteOnBeat({ track }) {
@@ -307,6 +336,7 @@ export default function TracciaPage() {
       </header>
 
       <Steps step={step} setStep={setStep} track={track} takeCount={takeCount} onStudio={goStudio} />
+      <VibeBar track={track} />
 
       {step === 'beat' && <BeatStep track={track} onNext={() => setStep('testo')} />}
       {step === 'testo' && (

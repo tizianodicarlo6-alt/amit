@@ -1,7 +1,9 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo, useRef, useState } from 'react';
 import { newSection, updateTrack } from '../../db/db.js';
 import { SECTION_TYPES, RHYME_COLORS, sectionLabel } from '../../constants.js';
-import { analyzeRhymes, countLineSyllables, tokenizeLine } from '../../lib/italiano.js';
+import { analyzeRhymes, countLineSyllables, multiColors, multiKeys, tokenizeLine } from '../../lib/italiano.js';
+import { wordAt } from '../../lib/rimario.js';
+import RhymeSheet from '../../components/RhymeSheet.jsx';
 import { useAutosave, SaveStatus } from '../../components/useAutosave.jsx';
 import Icon from '../../components/Icon.jsx';
 
@@ -32,6 +34,7 @@ const MODES = [
   ['off', 'No'],
   ['rime', 'Rime'],
   ['assonanze', 'Assonanze'],
+  ['multi', 'Multi'],
 ];
 
 function ModePicker({ value, onChange }) {
@@ -61,7 +64,25 @@ const Line = memo(function Line({ line, analysis, showRhymes, showSyllables }) {
   let content;
   if (!line) content = '​';
   else if (!showRhymes) content = line;
-  else
+  else if (analysis.mode === 'multi') {
+    // rime multisillabiche: coloro tutte le parole che fanno parte della rima
+    const parts = tokenizeLine(line);
+    const col = Array(parts.length).fill(undefined);
+    multiKeys(parts).forEach((m, i) => {
+      const c = m.mkey ? analysis.colors.get(m.mkey) : undefined;
+      if (c === undefined) return;
+      for (let j = m.from; j <= i; j++) if (/[a-zàèéìòù]/i.test(parts[j].text)) col[j] = c;
+    });
+    content = parts.map((p, i) =>
+      col[i] === undefined ? (
+        p.text
+      ) : (
+        <span key={i} className="rhyme" style={{ '--rc': RHYME_COLORS[col[i]] }}>
+          {p.text}
+        </span>
+      )
+    );
+  } else
     content = tokenizeLine(line).map((p, i) => {
       const g = analysis.groupKey(p);
       const c = g != null ? analysis.colors.get(g) : undefined;
@@ -83,7 +104,7 @@ const Line = memo(function Line({ line, analysis, showRhymes, showSyllables }) {
 });
 
 // Campo di testo trasparente sopra al "disegno": si scrive normalmente, si vedono i colori.
-function SectionText({ text, onChange, analysis, showRhymes, showSyllables, onFocus }) {
+function SectionText({ text, onChange, analysis, showRhymes, showSyllables, onFocus, onCaret }) {
   const lines = text.split('\n');
   return (
     <div className={`lyr${showSyllables ? ' with-syl' : ''}`}>
@@ -97,6 +118,7 @@ function SectionText({ text, onChange, analysis, showRhymes, showSyllables, onFo
         value={text}
         onChange={(e) => onChange(e.target.value)}
         onFocus={onFocus}
+        onSelect={(e) => onCaret?.(e.target.value, e.target.selectionStart)}
         spellCheck={false}
         autoCorrect="off"
         autoCapitalize="sentences"
@@ -114,7 +136,13 @@ export default function LyricsEditor({ track, onFocusSection, activeId }) {
   const status = useAutosave(sections, (v) => updateTrack(track.id, { sections: v }));
 
   const allText = useMemo(() => sections.map((s) => s.text).join('\n'), [sections]);
-  const analysis = useMemo(() => analyzeRhymes(allText, mode, RHYME_COLORS.length), [allText, mode]);
+  const analysis = useMemo(
+    () => (mode === 'multi' ? { mode: 'multi', colors: multiColors(allText, RHYME_COLORS.length), stats: {} } : analyzeRhymes(allText, mode, RHYME_COLORS.length)),
+    [allText, mode]
+  );
+  const caret = useRef({ text: '', pos: 0 });
+  const [rimario, setRimario] = useState(null);
+  const openRimario = () => setRimario(wordAt(caret.current.text, caret.current.pos));
 
   const update = (id, changes) => setSections((list) => list.map((s) => (s.id === id ? { ...s, ...changes } : s)));
   const add = (type) => setSections((list) => [...list, newSection(type)]);
@@ -151,10 +179,21 @@ export default function LyricsEditor({ track, onFocusSection, activeId }) {
       <div className="editor-bar">
         <ModePicker value={mode} onChange={(v) => (setMode(v), writePref('q.rimeMode', v))} />
         <Toggle on={showSyllables} onChange={(v) => (setShowSyllables(v), writePref('q.sillabe', v))} label="Sillabe" />
+        <button className="btn sm" onPointerDown={(e) => e.preventDefault()} onClick={openRimario}>
+          Rimario
+        </button>
         <span className="grow" />
         <SaveStatus status={status} />
       </div>
-      {showRhymes && (
+      {rimario && <RhymeSheet word={rimario.word} prev={rimario.prev} onClose={() => setRimario(null)} />}
+      {mode === 'multi' && (
+        <div className="rhyme-legend muted small">
+          <span>
+            <span className="rhyme" style={{ '--rc': RHYME_COLORS[0] }}>multisillabiche</span> {analysis.colors.size} {analysis.colors.size === 1 ? 'gruppo' : 'gruppi'} · stesse vocali sulle ultime 3+ sillabe, anche dentro la riga
+          </span>
+        </div>
+      )}
+      {showRhymes && mode !== 'multi' && (
         <div className="rhyme-legend muted small">
           <span>
             <span className="rhyme" style={{ '--rc': RHYME_COLORS[0] }}>rima</span> {analysis.stats.rime} {analysis.stats.rime === 1 ? "gruppo" : "gruppi"}
@@ -193,7 +232,7 @@ export default function LyricsEditor({ track, onFocusSection, activeId }) {
                 <Icon name="trash" size={18} />
               </button>
             </div>
-            <SectionText onFocus={() => onFocusSection?.(s.id)} text={s.text} onChange={(text) => update(s.id, { text })} analysis={analysis} showRhymes={showRhymes} showSyllables={showSyllables} />
+            <SectionText onCaret={(text, pos) => (caret.current = { text, pos })} onFocus={() => onFocusSection?.(s.id)} text={s.text} onChange={(text) => update(s.id, { text })} analysis={analysis} showRhymes={showRhymes} showSyllables={showSyllables} />
           </section>
         );
       })}
