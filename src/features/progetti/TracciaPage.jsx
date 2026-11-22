@@ -350,7 +350,6 @@ export default function TracciaPage() {
       </header>
 
       <Steps step={step} setStep={setStep} track={track} takeCount={takeCount} onStudio={goStudio} />
-      <VibeBar track={track} />
       {track.mappa && (
         <details className="map-details">
           <summary>🧭 La mappa del pezzo</summary>

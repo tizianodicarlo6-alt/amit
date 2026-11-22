@@ -579,7 +579,7 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 
 /* Sfera "Ispirazione" (soci) */
 .nav-sphere { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; margin-top: -30px; border: 0; background: none; color: var(--text); padding: 0; }
-.sphere { width: 64px; height: 64px; border-radius: 50%; border: 4px solid var(--bg); background: radial-gradient(circle at 32% 28%, rgba(255,255,255,0.95) 0 6%, var(--s1) 34%, var(--s2) 78%, #000 100%); box-shadow: 0 0 0 1px rgba(255,255,255,0.2), 0 0 26px color-mix(in srgb, var(--s1) 60%, transparent); animation: breathe 3.6s ease-in-out infinite; }
+.sphere { width: 64px; height: 64px; border-radius: 50%; border: 4px solid var(--bg); background: radial-gradient(circle at 32% 28%, #fff 0 8%, #d9d9de 30%, #6b6b74 72%, #1a1a1e 100%); box-shadow: 0 0 0 1px rgba(255,255,255,0.2), 0 0 22px rgba(255,255,255,0.18); animation: breathe 3.6s ease-in-out infinite; }
 .sphere-lab { font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .nav-sphere:active .sphere { transform: scale(0.92); }
 @keyframes breathe { 0%, 100% { transform: scale(1); filter: brightness(1); } 50% { transform: scale(1.06); filter: brightness(1.18); } }
