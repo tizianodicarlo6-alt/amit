@@ -261,7 +261,11 @@ function WriteOnBeat({ track }) {
   useEffect(() => {
     const sec = (track.sections || []).find((x) => x.id === active);
     setResume({ kind: 'track', id: track.id, title: track.title || 'Senza titolo', sec: active, secLabel: sec ? sectionLabel(sec.type) : null });
-    if (active) setTimeout(() => document.querySelector(`[data-sec="${active}"]`)?.scrollIntoView({ block: 'center' }), 300);
+    try {
+      if (active) sessionStorage.setItem(`amit.sez.${track.id}`, active); // lo studio parte da qui
+    } catch {
+      /* ignorato */
+    }
   }, [active, track.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [free, setFree] = useState(null);
@@ -342,7 +346,15 @@ export default function TracciaPage() {
   if (!track) return <div className="page empty">Traccia non trovata.</div>;
 
   const step = stepPick ?? 'testo';
-  const goStudio = () => navigate(`/studio/${track.id}`);
+  const goStudio = () => {
+    let sez = null;
+    try {
+      sez = sessionStorage.getItem(`amit.sez.${track.id}`);
+    } catch {
+      /* ignorato */
+    }
+    navigate(`/studio/${track.id}${sez ? `?sez=${sez}` : ''}`);
+  };
   const remove = async () => {
     if (!confirm(`Eliminare la traccia "${track.title}"? Le idee collegate restano nelle note.`)) return;
     await deleteTrack(id);

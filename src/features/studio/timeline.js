@@ -7,8 +7,14 @@ import { sectionLabel } from '../../constants.js';
  * attack:   secondi dove parte il testo se la prima sezione non è segnata
  * barDur:   durata di una battuta (4 battiti) in secondi
  * barsPerLine: battute per ogni barra di testo (di solito 1)
+ * snapBars: se > 0, una sezione senza partenza segnata attacca sul prossimo giro di N battute
+ *           (i pezzi del beat cambiano ogni 4/8 battute: una strofa di 14 barre lascia 2 battute di pausa)
+ * firstFromMap: la prima sezione parte dal primo pezzo del beat dello stesso tipo (se l'attacco non è segnato)
+ * map:      la mappa del beat [{ start, kind }]: se c'è un pezzo dello stesso tipo poco più avanti, attacco lì
  */
-export function buildTimeline(sections = [], { starts = {}, attack = 0, barDur = 2.4, barsPerLine = 1 } = {}) {
+const MAP_KIND = { ritornello: 'rit', strofa: 'strofa', intro: 'intro', outro: 'outro', bridge: 'break' };
+
+export function buildTimeline(sections = [], { starts = {}, attack = 0, barDur = 2.4, barsPerLine = 1, snapBars = 0, map = null, firstFromMap = false } = {}) {
   const lineDur = barDur * barsPerLine;
   const lines = [];
   const blocks = [];
@@ -21,7 +27,18 @@ export function buildTimeline(sections = [], { starts = {}, attack = 0, barDur =
     if (!texts.length) continue;
     seen[s.type] = (seen[s.type] || 0) + 1;
     const explicit = starts[s.id] != null;
-    const start = explicit ? starts[s.id] : cursor;
+    let start = explicit ? starts[s.id] : cursor;
+    if (!explicit && snapBars && blocks.length && barDur) {
+      const g = snapBars * barDur;
+      const a0 = blocks[0].start; // il giro parte da dove attacca il testo
+      start = a0 + Math.ceil((cursor - a0) / g - 1e-3) * g;
+    }
+    if (!explicit && map?.length && (blocks.length || firstFromMap)) {
+      const want = MAP_KIND[s.type];
+      // la prima sezione (attacco non segnato): il primo pezzo di quel tipo nel beat
+      const m = blocks.length ? map.find((x) => x.kind === want && x.start >= cursor - barDur * 0.5 && x.start <= cursor + 8 * barDur) : map.find((x) => x.kind === want);
+      if (m) start = m.start;
+    }
     const label = `${sectionLabel(s.type)}${totals[s.type] > 1 ? ` ${seen[s.type]}` : ''}`;
     const first = lines.length;
     texts.forEach((text, j) => lines.push({ index: lines.length, sectionId: s.id, text, time: start + j * lineDur }));

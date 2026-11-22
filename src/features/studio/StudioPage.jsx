@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useDbQuery } from '../../db/useDbQuery.js';
 import { addTake, db, updateBeat, updateTake, updateTrack } from '../../db/db.js';
 import { KEYS, ROLES, formatTime, keyShort, roleLabel } from '../../constants.js';
@@ -20,6 +20,7 @@ import BeatTimeline from './BeatTimeline.jsx';
 import { dbToGain, normalizeStrip } from './fx.js';
 import EffectsSheet from './EffectsSheet.jsx';
 import MixSheet from './MixSheet.jsx';
+import StudioNotes from './StudioNotes.jsx';
 import { buildTimeline, lineAt, nextBlockAfter, onBeatBefore, snapToBeat } from './timeline.js';
 
 export default function StudioPage() {
@@ -112,7 +113,10 @@ export default function StudioPage() {
   };
   const fxCount = (role) => Object.values(chFx(role)).filter((x) => x.on).length;
 
-  const timeline = useMemo(() => buildTimeline(track?.sections, { starts, attack, barDur, barsPerLine }), [track?.sections, starts, attack, barDur, barsPerLine]);
+  const timeline = useMemo(() => buildTimeline(track?.sections, { starts, attack, barDur, barsPerLine, snapBars: bpm ? 4 : 0, map: beat?.map, firstFromMap: attackAuto }), [track?.sections, starts, attack, barDur, barsPerLine, bpm, beat?.map, attackAuto]);
+  // arrivo dal testo mentre scrivevo il ritornello (?sez=): parto qualche secondo prima di quella sezione
+  const [params] = useSearchParams();
+  const sezDone = useRef(false);
   // Partenza automatica: qualche secondo prima della prima sezione scritta
   const firstBlock = timeline.blocks[0];
   const autoStart = firstBlock ? Math.max(0, firstBlock.start - preRoll) : 0;
@@ -361,6 +365,15 @@ export default function StudioPage() {
     setPos(t);
   };
 
+  useEffect(() => {
+    const sez = params.get('sez');
+    if (sezDone.current || !sez || !beatBuf) return;
+    const b = timeline.blocks.find((x) => x.id === sez);
+    if (!b) return;
+    sezDone.current = true;
+    if (b.first > 0) onPickLine(b.first);
+  }, [timeline, beatBuf]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Mentre suona il beat: tocco il nome di una sezione = "questa sezione parte adesso"
   const onMarkSection = (blockId) => {
     if (modeRef.current !== 'playing') return false;
@@ -456,7 +469,10 @@ export default function StudioPage() {
   const active = mode === 'recording' || mode === 'playing';
   const micSilent = mode === 'recording' && silentSince.current && performance.now() - silentSince.current > 2500 && pre <= 0.02;
   const counting = active && pre > 0.02;
-  const current = active && !sync && !counting ? lineAt(pos, timeline) : -1;
+  const rawCur = active && !sync && !counting ? lineAt(pos, timeline) : -1;
+  // partito qualche secondo prima della sezione scelta: il testo resta fermo lì finché non attacca
+  const current = selectedLine != null && rawCur >= 0 && rawCur < selectedLine ? -1 : rawCur;
+  const selBlock = selectedLine != null ? timeline.blocks.find((b) => b.first === selectedLine) : null;
   const syncLabel = sync ? timeline.blocks.find((b) => b.id === sync.queue[0])?.label : null;
 
   // Conto alla rovescia durante intro e pause
@@ -547,6 +563,8 @@ export default function StudioPage() {
         </div>
       )}
       {flash && <div className="studio-flash">{flash}</div>}
+
+      <StudioNotes key={track.id} track={track} compact={view === 'rec'} />
 
       {view === 'mix' && beat && (
         <MixEditor
@@ -680,7 +698,7 @@ export default function StudioPage() {
                     ? `· ${preRoll} s prima di ${firstBlock.label}`
                     : '· inizio beat'
                   : selectedLine != null
-                    ? `· ${preRoll} s prima della riga scelta`
+                    ? `· ${preRoll} s prima ${selBlock ? `di ${selBlock.label}` : 'della riga scelta'}`
                     : '· scelta da te'}
               </span>
             </div>

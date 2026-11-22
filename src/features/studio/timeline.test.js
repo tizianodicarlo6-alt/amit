@@ -95,3 +95,25 @@ test('onBeatBefore: la partenza col metronomo cade su un battito', () => {
   assert.equal(onBeatBefore(6.8, 0.3, 0.5), 6.8);
   assert.ok(Math.abs(onBeatBefore(0.1, 0.3, 0.5) - 0.3) < 1e-9); // prima dell'attacco: primo battito ≥ 0
 });
+
+test('snapBars: la sezione dopo attacca sul giro di 4 battute', () => {
+  const secs = [
+    { id: 'a', type: 'strofa', text: Array(14).fill('x').join('\n') },
+    { id: 'b', type: 'ritornello', text: 'r\nr' },
+  ];
+  const t = buildTimeline(secs, { attack: 2, barDur: 2, snapBars: 4 });
+  assert.equal(t.blocks[0].start, 2);
+  assert.equal(t.blocks[1].start, 2 + 16 * 2);
+  const exact = buildTimeline([{ ...secs[0], text: Array(16).fill('x').join('\n') }, secs[1]], { attack: 2, barDur: 2, snapBars: 4 });
+  assert.equal(exact.blocks[1].start, 2 + 16 * 2);
+});
+
+test('mappa del beat: il ritornello attacca dove il beat ha il ritornello', () => {
+  const secs = [
+    { id: 'a', type: 'strofa', text: Array(12).fill('x').join('\n') },
+    { id: 'b', type: 'ritornello', text: 'r\nr' },
+  ];
+  const map = [{ start: 0, kind: 'intro' }, { start: 2, kind: 'strofa' }, { start: 34, kind: 'rit' }];
+  const t = buildTimeline(secs, { attack: 2, barDur: 2, snapBars: 4, map });
+  assert.equal(t.blocks[1].start, 34);
+});

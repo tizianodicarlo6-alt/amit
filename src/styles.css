@@ -805,3 +805,24 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .trial-row b { white-space: nowrap; }
 .trial-row.ok b { color: #3ddc84; }
 .strada-ai { text-align: left; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 10px; padding: 8px 10px; font-size: 14px; }
+/* testo unico: le righe-titolo (Ritornello, Strofa 2…) fanno da divisori */
+.lyr-sheet { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.lyr-sheet .lyr-back, .lyr-sheet .lyr-input { min-height: 14em; }
+.lyr-line.lyr-headline { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 6px; margin: 0 -6px; padding: 0 6px; }
+.lyr-line.lyr-headline.on { background: color-mix(in srgb, var(--accent) 26%, transparent); }
+.add-sections .chips { flex-wrap: wrap; }
+/* Studio: appunti e intenzione */
+.snotes-mini { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px; margin: 0 0 8px; border-radius: 12px; background: #141418; border: 1px solid var(--border); color: var(--text); font-size: 13px; text-align: left; flex: none; }
+.snotes-mini .sn-k { font-size: 10px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.snotes-mini .sn-int { font-weight: 800; color: var(--accent); }
+.snotes { display: flex; flex-direction: column; gap: 8px; padding: 10px; margin: 0 0 8px; border-radius: 12px; background: #141418; border: 1px solid var(--border); flex: none; }
+.sn-chips { flex-wrap: wrap; }
+.sn-chips .chip.on { background: var(--accent); color: #000; border-color: var(--accent); }
+.sn-text { min-height: 70px; font-size: 15px; }
+.bl-maprow { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.bl-maprow .bl-map { flex: 1; margin-top: 0; }
+.bl-fix { flex: none; height: 22px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border); background: #1a1a1f; color: var(--muted); font-size: 11px; font-weight: 800; }
+.bl-fix.on { background: var(--accent); color: #000; border-color: var(--accent); }
+.bl-fixbar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: center; }
+.bl-fixbar .chip.on { background: var(--accent); color: #000; border-color: var(--accent); }
+.bl-sec.k-intro, .bl-sec.k-outro { background: #8a8a94; }

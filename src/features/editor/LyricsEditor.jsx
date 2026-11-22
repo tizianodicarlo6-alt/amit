@@ -1,7 +1,8 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { newSection, updateTrack } from '../../db/db.js';
-import { SECTION_TYPES, RHYME_COLORS, sectionLabel } from '../../constants.js';
+import { updateTrack } from '../../db/db.js';
+import { SECTION_TYPES, RHYME_COLORS } from '../../constants.js';
+import { cleanSections, headerType, parseLyrics, sectionAtLine, sectionsToText } from '../../lib/sezioni.js';
 import { analyzeRhymes, countLineSyllables, multiColors, multiKeys, tokenizeLine } from '../../lib/italiano.js';
 import { wordAt } from '../../lib/rimario.js';
 import RhymeSheet from '../../components/RhymeSheet.jsx';
@@ -62,7 +63,8 @@ function Toggle({ on, onChange, label }) {
 }
 
 // Una riga "disegnata" sotto al campo di testo: parole colorate + sillabe.
-const Line = memo(function Line({ line, analysis, showRhymes, showSyllables, target }) {
+const Line = memo(function Line({ line, analysis, showRhymes, showSyllables, target, header }) {
+  if (header) return <div className={`lyr-line lyr-headline${header.active ? ' on' : ''}`}>{line}</div>;
   const syl = showSyllables && line.trim() ? countLineSyllables(line) : null;
   let content;
   if (!line) content = '​';
@@ -112,88 +114,125 @@ const Line = memo(function Line({ line, analysis, showRhymes, showSyllables, tar
   );
 });
 
-// Campo di testo trasparente sopra al "disegno": si scrive normalmente, si vedono i colori.
-function SectionText({ text, onChange, analysis, showRhymes, showSyllables, onFocus, onCaret, targets }) {
-  const lines = text.split('\n');
-  return (
-    <div className={`lyr${showSyllables ? ' with-syl' : ''}`}>
-      <div className="lyr-back" aria-hidden="true">
-        {lines.map((l, i) => (
-          <Line key={i} line={l} analysis={analysis} showRhymes={showRhymes} showSyllables={showSyllables} target={targets?.[i]} />
-        ))}
-      </div>
-      <textarea
-        className="lyr-input"
-        value={text}
-        onChange={(e) => onChange(e.target.value)}
-        onFocus={onFocus}
-        onSelect={(e) => onCaret?.(e.target.value, e.target.selectionStart)}
-        spellCheck={false}
-        autoCorrect="off"
-        autoCapitalize="sentences"
-        placeholder="Scrivi qui le barre, una per riga…"
-      />
-    </div>
-  );
-}
+// Il testo di partenza: quello scritto come testo unico, oppure le vecchie schede messe in fila
+const startText = (track) => {
+  const secs = track.sections || [];
+  if (typeof track.lyrics === 'string') {
+    const same = cleanSections(parseLyrics(track.lyrics, secs));
+    if (JSON.stringify(same) === JSON.stringify(secs.map(({ id, type, text }) => ({ id, type, text })))) return track.lyrics;
+  }
+  return sectionsToText(secs);
+};
 
+/**
+ * Il testo della traccia: un foglio unico, come le note. Chi scrive sa dov'è il ritornello:
+ * basta una riga "Ritornello" o "Strofa 2" (o i tasti sotto) e lo studio sa dove parte ogni pezzo.
+ */
 export default function LyricsEditor({ track, onFocusSection, activeId, targets = {} }) {
-  const [sections, setSections] = useState(() => (track.sections?.length ? track.sections : [newSection('strofa')]));
+  const [text, setText] = useState(() => startText(track));
   const [mode, setMode] = useState(readMode);
   const showRhymes = mode !== 'off';
   const [showSyllables, setShowSyllables] = useState(() => readPref('q.sillabe', true));
-  const status = useAutosave(sections, (v) => updateTrack(track.id, { sections: v }));
+  const parsedRef = useRef(null);
+  const parsed = useMemo(() => parseLyrics(text, parsedRef.current || track.sections || []), [text]); // eslint-disable-line react-hooks/exhaustive-deps
+  parsedRef.current = parsed;
+  const status = useAutosave(text, (v) => updateTrack(track.id, { lyrics: v, sections: cleanSections(parseLyrics(v, parsedRef.current || [])) }));
+  const taRef = useRef(null);
 
-  const allText = useMemo(() => sections.map((s) => s.text).join('\n'), [sections]);
+  const lines = text.split('\n');
+  const isHeader = useMemo(() => lines.map((l) => !!headerType(l)), [text]); // eslint-disable-line react-hooks/exhaustive-deps
+  // per le rime conto solo le barre (non i titoli)
+  const barsText = useMemo(() => lines.filter((l, i) => !isHeader[i]).join('\n'), [text]); // eslint-disable-line react-hooks/exhaustive-deps
   const analysis = useMemo(
-    () => (mode === 'multi' ? { mode: 'multi', colors: multiColors(allText, RHYME_COLORS.length), stats: {} } : analyzeRhymes(allText, mode, RHYME_COLORS.length)),
-    [allText, mode]
+    () => (mode === 'multi' ? { mode: 'multi', colors: multiColors(barsText, RHYME_COLORS.length), stats: {} } : analyzeRhymes(barsText, mode, RHYME_COLORS.length)),
+    [barsText, mode]
   );
+  const [caretLine, setCaretLine] = useState(0);
   const caret = useRef({ text: '', pos: 0 });
-  // barre scritte oggi (per i contatori della prova)
-  const filledNow = allText.split('\n').filter((l) => l.trim()).length;
-  const filledRef = useRef(filledNow);
+  const totalBars = lines.filter((l, i) => l.trim() && !isHeader[i]).length;
+  const filledRef = useRef(totalBars);
   useEffect(() => {
-    if (filledNow > filledRef.current) addBars(filledNow - filledRef.current);
-    filledRef.current = Math.max(filledRef.current, filledNow);
-  }, [filledNow]);
+    if (totalBars > filledRef.current) addBars(totalBars - filledRef.current);
+    filledRef.current = Math.max(filledRef.current, totalBars);
+  }, [totalBars]);
   const [rimario, setRimario] = useState(null);
   const openRimario = () => setRimario(wordAt(caret.current.text, caret.current.pos));
-  // 👻 barra fantasma: fermo da ~3 minuti nella sezione dove stai scrivendo
-  const [focusId, setFocusId] = useState(null);
-  const focusSec = sections.find((x) => x.id === focusId) || null;
-  const ghostAt = focusSec ? caret.current.text.slice(0, caret.current.pos).split('\n').length - 1 : 0;
-  const ghost = useGhost({ lines: focusSec ? focusSec.text.split('\n') : [], at: ghostAt, exclude: track.id, enabled: !!focusSec });
 
-  const update = (id, changes) => setSections((list) => list.map((s) => (s.id === id ? { ...s, ...changes } : s)));
-  const add = (type) => setSections((list) => [...list, newSection(type)]);
-  const move = (i, dir) =>
-    setSections((list) => {
-      const j = i + dir;
-      if (j < 0 || j >= list.length) return list;
-      const copy = [...list];
-      [copy[i], copy[j]] = [copy[j], copy[i]];
-      return copy;
-    });
-  const remove = (s) => {
-    if (s.text.trim() && !confirm(`Eliminare la sezione "${sectionLabel(s.type)}"?`)) return;
-    setSections((list) => list.filter((x) => x.id !== s.id));
+  // in che sezione sto scrivendo (dal cursore)
+  const onCaret = (value, pos) => {
+    const lineIdx = value.slice(0, pos).split('\n').length - 1;
+    const lineStart = value.lastIndexOf('\n', pos - 1) + 1;
+    const lineEnd = value.indexOf('\n', pos);
+    caret.current = { text: value.slice(lineStart, lineEnd < 0 ? undefined : lineEnd), pos: pos - lineStart };
+    setCaretLine(lineIdx);
+    const sec = sectionAtLine(parseLyrics(value, parsedRef.current || []), lineIdx);
+    if (sec && sec.id !== activeId) onFocusSection?.(sec.id);
   };
+  // quando cambio sezione da fuori (la Home, "Riprendi") porto il cursore lì
+  const jumpTo = useRef(activeId); // solo la sezione con cui apro la pagina, non quelle in cui entro scrivendo
+  useEffect(() => {
+    if (!jumpTo.current || !taRef.current) return;
+    const sec = parsed.find((x) => x.id === jumpTo.current);
+    if (!sec) return;
+    jumpTo.current = null;
+    const ta = taRef.current;
+    const pos = lines.slice(0, Math.max(sec.from, 0)).join('\n').length + (sec.from > 0 ? 1 : 0);
+    setTimeout(() => {
+      if (document.activeElement === ta) return; // stai già scrivendo: non ti sposto
+      ta.focus({ preventScroll: true });
+      ta.setSelectionRange(pos, pos);
+      ta.scrollIntoView({ block: 'center' });
+    }, 300);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 👻 barra fantasma: fermo da ~3 minuti
+  const ghost = useGhost({ lines, at: caretLine, exclude: track.id, enabled: true });
+
+  // + Ritornello / + Strofa: scrive la riga-titolo dove sei
+  const addHeader = (type) => {
+    const ta = taRef.current;
+    const pos = ta ? ta.selectionStart : text.length;
+    const before = text.slice(0, pos);
+    const after = text.slice(pos);
+    const n = parsed.filter((x) => x.type === type).length;
+    const label = SECTION_TYPES.find((t) => t.id === type)?.label || 'Strofa';
+    const title = `${label}${type === 'strofa' && n >= 1 ? ` ${n + 1}` : ''}`;
+    const pre = !before.trim() ? '' : before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+    const ins = `${pre}${title}\n`;
+    const next = before + ins + (after.startsWith('\n') || !after ? after : `\n${after}`);
+    pendingCaret.current = before.length + ins.length;
+    setText(next);
+  };
+  // il cursore va subito dopo il titolo, prima che arrivi la prossima lettera
+  const pendingCaret = useRef(null);
+  useLayoutEffect(() => {
+    const at = pendingCaret.current;
+    const ta = taRef.current;
+    if (at == null || !ta) return;
+    pendingCaret.current = null;
+    ta.focus();
+    ta.setSelectionRange(at, at);
+    onCaret(text, at);
+  }, [text]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const copyAll = async () => {
-    const txt = sections.map((s) => `[${sectionLabel(s.type)}]\n${s.text.trim()}`).join('\n\n');
     try {
-      await navigator.clipboard.writeText(txt);
+      await navigator.clipboard.writeText(text.trim());
       alert('Testo copiato!');
     } catch {
       alert('Non riesco a copiare su questo dispositivo.');
     }
   };
 
-  // Numerazione: "Strofa 1", "Strofa 2"… solo se ce n'è più d'una dello stesso tipo.
-  const totals = sections.reduce((m, s) => ({ ...m, [s.type]: (m[s.type] || 0) + 1 }), {});
-  const seen = {};
-  const totalBars = allText.split('\n').filter((l) => l.trim()).length;
+  // sillabe del nanana accanto alle barre della sezione che le ha
+  const lineTargets = {};
+  for (const s of parsed) {
+    const tg = targets[s.id];
+    if (!tg) continue;
+    let k = 0;
+    for (let i = s.from; i <= s.to && k < tg.length; i++) if (lines[i]?.trim()) lineTargets[i] = tg[k++];
+  }
+  const activeSec = parsed.find((x) => x.id === activeId);
 
   return (
     <div className="editor">
@@ -213,7 +252,7 @@ export default function LyricsEditor({ track, onFocusSection, activeId, targets 
         onNext={ghost.next}
         onClose={ghost.dismiss}
         onUse={(g) => {
-          if (focusSec) update(focusSec.id, { text: insertGhostLine(focusSec.text, ghostAt, g) });
+          setText(insertGhostLine(text, caretLine, g));
           logEvent('reuse');
           ghost.dismiss();
         }}
@@ -228,52 +267,41 @@ export default function LyricsEditor({ track, onFocusSection, activeId, targets 
       {showRhymes && mode !== 'multi' && (
         <div className="rhyme-legend muted small">
           <span>
-            <span className="rhyme" style={{ '--rc': RHYME_COLORS[0] }}>rima</span> {analysis.stats.rime} {analysis.stats.rime === 1 ? "gruppo" : "gruppi"}
+            <span className="rhyme" style={{ '--rc': RHYME_COLORS[0] }}>rima</span> {analysis.stats.rime} {analysis.stats.rime === 1 ? 'gruppo' : 'gruppi'}
           </span>
           {mode === 'assonanze' && (
             <span>
-              <span className="rhyme ass" style={{ '--rc': RHYME_COLORS[1] }}>assonanza</span> {analysis.stats.assonanze} {analysis.stats.assonanze === 1 ? "gruppo" : "gruppi"}
+              <span className="rhyme ass" style={{ '--rc': RHYME_COLORS[1] }}>assonanza</span> {analysis.stats.assonanze} {analysis.stats.assonanze === 1 ? 'gruppo' : 'gruppi'}
             </span>
           )}
         </div>
       )}
 
-      {sections.map((s, i) => {
-        seen[s.type] = (seen[s.type] || 0) + 1;
-        const bars = s.text.split('\n').filter((l) => l.trim()).length;
-        return (
-          <section key={s.id} data-sec={s.id} className={`lyr-section type-${s.type}${activeId === s.id ? ' active' : ''}`}>
-            <div className="lyr-head">
-              <select className="section-select" value={s.type} onChange={(e) => update(s.id, { type: e.target.value })} aria-label="Tipo di sezione">
-                {SECTION_TYPES.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.label}
-                    {totals[s.type] > 1 && t.id === s.type ? ` ${seen[s.type]}` : ''}
-                  </option>
-                ))}
-              </select>
-              <span className="muted small">{bars} barre</span>
-              <span className="grow" />
-              <button className="icon-btn sm" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Sposta su">
-                <Icon name="up" size={18} />
-              </button>
-              <button className="icon-btn sm" onClick={() => move(i, 1)} disabled={i === sections.length - 1} aria-label="Sposta giù">
-                <Icon name="down" size={18} />
-              </button>
-              <button className="icon-btn sm" onClick={() => remove(s)} disabled={sections.length === 1} aria-label="Elimina sezione">
-                <Icon name="trash" size={18} />
-              </button>
-            </div>
-            <SectionText targets={targets[s.id]} onCaret={(text, pos) => (caret.current = { text, pos })} onFocus={() => (setFocusId(s.id), onFocusSection?.(s.id))} text={s.text} onChange={(text) => update(s.id, { text })} analysis={analysis} showRhymes={showRhymes} showSyllables={showSyllables} />
-          </section>
-        );
-      })}
+      <div className="lyr-sheet">
+        <div className={`lyr${showSyllables ? ' with-syl' : ''}`}>
+          <div className="lyr-back" aria-hidden="true">
+            {lines.map((l, i) => (
+              <Line key={i} line={l} analysis={analysis} showRhymes={showRhymes} showSyllables={showSyllables} target={lineTargets[i]} header={isHeader[i] ? { active: activeSec?.header === i } : null} />
+            ))}
+          </div>
+          <textarea
+            ref={taRef}
+            className="lyr-input"
+            value={text}
+            onChange={(e) => (setText(e.target.value), onCaret(e.target.value, e.target.selectionStart))}
+            onSelect={(e) => onCaret(e.target.value, e.target.selectionStart)}
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="sentences"
+            placeholder={'Scrivi qui le barre, una per riga.\n\nPer dividere il pezzo scrivi su una riga da sola “Ritornello” o “Strofa 2”, oppure usa i tasti qui sotto.'}
+          />
+        </div>
+      </div>
 
       <div className="add-sections">
-        <span className="field-label">Aggiungi sezione</span>
         <div className="chips">
           {SECTION_TYPES.map((t) => (
-            <button key={t.id} className="chip" onClick={() => add(t.id)}>
+            <button key={t.id} className="chip sm" onPointerDown={(e) => e.preventDefault()} onClick={() => addHeader(t.id)}>
               + {t.label}
             </button>
           ))}
@@ -281,7 +309,7 @@ export default function LyricsEditor({ track, onFocusSection, activeId, targets 
       </div>
 
       <div className="row between muted small">
-        <span>{totalBars} barre in totale</span>
+        <span>{totalBars} barre</span>
         <button className="btn ghost sm" onClick={copyAll}>
           <Icon name="copy" size={18} /> Copia testo
         </button>
