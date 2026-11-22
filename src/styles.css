@@ -717,3 +717,20 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 @keyframes topflare { 50% { transform: scale(1.35); filter: drop-shadow(0 0 14px #ffd24a); } }
 .fb-q { position: absolute; left: -2px; right: -2px; bottom: -22px; text-align: center; font-size: 10px; font-weight: 800; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .fb-fill, .fb-flame { transition: none; } .fb-flame.top { animation: none; } }
+
+/* Livello e mana */
+.lv-line { display: flex; gap: 8px; margin-top: 4px; }
+.lv-pill, .mana-pill { font-size: 12px; font-weight: 800; letter-spacing: .03em; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); }
+.mana-pill { color: #9ec5ff; border-color: #2d4a7a; background: #0e1626; }
+.provino-btn { width: 100%; margin: -4px 0 10px; border-color: #2d4a7a; }
+.provino-done { font-size: 13px; color: var(--muted); margin: -4px 0 10px; }
+.provino-done b { color: #9ec5ff; }
+.levelup { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.lv-kicker { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.lv-num { font-size: 40px; font-weight: 900; animation: lvpop .6s cubic-bezier(.2, 1.6, .4, 1); }
+.lv-mana { font-size: 20px; font-weight: 800; color: #9ec5ff; }
+.lv-rows { width: 100%; display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.lv-rows > div { display: flex; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface); text-align: left; font-size: 14px; }
+.lv-rows small { color: var(--muted); }
+.lv-rows b { color: #9ec5ff; }
+@keyframes lvpop { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }

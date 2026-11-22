@@ -7,15 +7,21 @@ import TrackCard from '../progetti/TrackCard.jsx';
 import IdeaCard from '../taccuino/IdeaCard.jsx';
 import { STUDIO, whatsappLink } from '../../config.js';
 import { personalGreeting, useProfile } from '../../lib/profile.js';
+import { levelOf } from '../../lib/progress.js';
 import { useCloud } from '../../lib/cloud.js';
 
 // Home dei soci: saluto personale e "che pezzo vuoi scrivere?"
 function MemberHero({ profile }) {
   const g = personalGreeting(profile.name);
+  const progress = useDbQuery(() => getMeta('progress'), [], null);
   return (
     <section className="member-hero">
       <p className="hero-greet">{g.hello.replace(/,$/, '')}</p>
       <h1 className="hero-title">{g.question}</h1>
+      <div className="lv-line">
+        <span className="lv-pill">Livello {levelOf(progress)}</span>
+        <span className="mana-pill">✦ {progress?.mana || 0} mana</span>
+      </div>
     </section>
   );
 }
