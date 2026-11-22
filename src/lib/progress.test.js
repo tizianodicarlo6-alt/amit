@@ -20,3 +20,15 @@ test('livello e mana', () => {
   assert.equal(p.mana, m.total);
   assert.equal(levelOf(null), 1);
 });
+
+test('settimana e numeri della settimana', async () => {
+  const { weekKey, weekStats } = await import('./progress.js');
+  assert.equal(weekKey(new Date(2026, 10, 22, 15).getTime()), '2026-11-16'); // domenica → lunedì prima
+  assert.equal(weekKey(new Date(2026, 10, 23, 1).getTime()), '2026-11-23'); // lunedì
+  const now = new Date(2026, 10, 22, 15).getTime();
+  const p = { provini: 3, mana: 200, log: [{ at: now - 86400000, mana: 60 }, { at: now - 10 * 86400000, mana: 80 }, { at: now, mana: 60 }] };
+  const w = weekStats(p, now);
+  assert.equal(w.provini, 2);
+  assert.equal(w.mana, 120);
+  assert.equal(w.level, 4);
+});

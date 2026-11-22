@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import Sheet from '../../components/Sheet.jsx';
 import { getMeta, setMeta, updateTrack } from '../../db/db.js';
-import { addProvino, levelOf, provinoMana } from '../../lib/progress.js';
+import { addProvino, levelOf, provinoMana, weekStats } from '../../lib/progress.js';
+import { sendScore } from '../../lib/cloud.js';
 import { loadRank } from '../../lib/rimario.js';
 
 // "Chiudi il provino": +1 livello e mana in base a quanto sono tecniche strofe e melodia
@@ -25,6 +26,7 @@ export default function ProvinoClose({ track, takeCount }) {
     await setMeta('progress', progress);
     await updateTrack(track.id, { closedAt: Date.now(), closedMana: mana.total, ...(track.status === 'finita' ? {} : { status: 'registrata' }) });
     setResult({ mana, level: levelOf(progress), total: progress.mana });
+    sendScore(weekStats(progress)).catch(() => {}); // la classifica tra soci si aggiorna (se sei online)
     setBusy(false);
   };
 

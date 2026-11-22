@@ -36,3 +36,19 @@ export function addProvino(progress, track, mana) {
     log: [...(p.log || []), { trackId: track.id, title: track.title, at: Date.now(), mana: mana.total }].slice(-100),
   };
 }
+
+/** Settimana (lunedì-domenica) in formato "2026-11-16" = il lunedì. */
+export function weekKey(ts = Date.now()) {
+  const d = new Date(ts);
+  const day = (d.getDay() + 6) % 7; // 0 = lunedì
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - day);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** I numeri di questa settimana: provini chiusi e mana presi. */
+export function weekStats(progress, now = Date.now()) {
+  const wk = weekKey(now);
+  const log = (progress?.log || []).filter((e) => weekKey(e.at) === wk);
+  return { week: wk, provini: log.length, mana: log.reduce((s, e) => s + (e.mana || 0), 0), level: levelOf(progress), totalMana: progress?.mana || 0 };
+}

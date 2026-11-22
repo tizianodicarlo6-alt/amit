@@ -96,7 +96,7 @@ export async function refreshUnread() {
   if (!state.user) return;
   try {
     const sb = await cloud();
-    const { count } = await sb.from('messages').select('id', { count: 'exact', head: true }).eq('to_user', state.user).is('read_at', null);
+    const { count } = await sb.from('messages').select('id', { count: 'exact', head: true }).eq('to_user', state.user).is('read_at', null).neq('kind', 'score');
     set({ unread: count || 0 });
   } catch {
     /* offline */
@@ -128,6 +128,7 @@ export async function loadChat(other, limit = 200) {
     .from('messages')
     .select('*')
     .or(`and(from_user.eq.${me},to_user.eq.${other}),and(from_user.eq.${other},to_user.eq.${me})`)
+    .neq('kind', 'score')
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) throw error;
@@ -205,4 +206,24 @@ export async function callFunction(name, body) {
     throw new Error(msg);
   }
   return data;
+}
+
+// ---- classifica tra soci: i numeri della settimana viaggiano come messaggi "score" (non si vedono in chat)
+
+/** Manda i miei numeri della settimana agli altri soci. */
+export async function sendScore(stats) {
+  if (!state.user) return;
+  const others = CLOUD.members.filter((m) => m.id !== state.user);
+  for (const m of others) await sendMessage(m.id, { kind: 'score', body: '', payload: stats });
+}
+
+/** Gli ultimi numeri arrivati da ogni socio: { shower: { week, provini, mana, level, totalMana, at } } */
+export async function loadScores() {
+  if (!state.user) return {};
+  const sb = await cloud();
+  const { data, error } = await sb.from('messages').select('from_user,payload,created_at').eq('to_user', state.user).eq('kind', 'score').order('created_at', { ascending: false }).limit(50);
+  if (error) throw error;
+  const out = {};
+  for (const r of data) if (!out[r.from_user]) out[r.from_user] = { ...r.payload, at: r.created_at };
+  return out;
 }

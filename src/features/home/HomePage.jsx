@@ -7,10 +7,11 @@ import TrackCard from '../progetti/TrackCard.jsx';
 import IdeaCard from '../taccuino/IdeaCard.jsx';
 import { STUDIO, whatsappLink } from '../../config.js';
 import { personalGreeting, useProfile } from '../../lib/profile.js';
-import { levelOf } from '../../lib/progress.js';
+import { levelOf, weekStats } from '../../lib/progress.js';
 import { getResume } from '../../lib/resume.js';
 import { sectionLabel } from '../../constants.js';
-import { useCloud } from '../../lib/cloud.js';
+import { loadScores, otherMembers, sendScore, useCloud } from '../../lib/cloud.js';
+import { useEffect, useState } from 'react';
 
 // Home dei soci: saluto personale e "che pezzo vuoi scrivere?"
 function MemberHero({ profile }) {
@@ -52,6 +53,57 @@ function ResumeCard() {
       <span className="resume-t ellipsis">{item.title || r.title}</span>
       <span className="muted small">{r.kind === 'track' ? `Traccia${sec ? ` · ${sectionLabel(sec.type)}` : ''}` : 'Nota'}</span>
     </button>
+  );
+}
+
+// ⚔ La classifica della settimana tra soci (provini chiusi e mana)
+function Classifica({ profile }) {
+  const cloudState = useCloud();
+  const progress = useDbQuery(() => getMeta('progress'), [], null);
+  const [others, setOthers] = useState(null);
+  const mine = weekStats(progress);
+  useEffect(() => {
+    if (!cloudState.user) return;
+    loadScores().then(setOthers).catch(() => setOthers({}));
+    // i miei numeri agli altri, se sono cambiati da quando li ho mandati
+    const key = JSON.stringify({ w: mine.week, p: mine.provini, m: mine.mana });
+    let last = null;
+    try {
+      last = localStorage.getItem('amit.scoreSent');
+    } catch {
+      /* ignorato */
+    }
+    if (progress !== null && last !== key) sendScore(mine).then(() => localStorage.setItem('amit.scoreSent', key)).catch(() => {});
+  }, [cloudState.user, progress]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!cloudState.user) return null;
+  const rows = [{ id: profile.id, name: profile.name, ...mine, me: true }];
+  for (const m of otherMembers(profile.id)) {
+    const sc = others?.[m.id];
+    const same = sc && sc.week === mine.week;
+    rows.push({ id: m.id, name: m.name, provini: same ? sc.provini : 0, mana: same ? sc.mana : 0, level: sc?.level || 1 });
+  }
+  rows.sort((a, b) => b.provini - a.provini || b.mana - a.mana);
+  return (
+    <div className="card classifica">
+      <div className="row between">
+        <span className="resume-k">Classifica della settimana</span>
+        <Link to="/messaggi" className="see-all">
+          Sfida
+        </Link>
+      </div>
+      {rows.map((r, i) => (
+        <div key={r.id} className={`cl-row${r.me ? ' me' : ''}`}>
+          <span className="cl-pos">{i + 1}</span>
+          <span className="grow">
+            {r.name} <span className="muted small">· liv. {r.level}</span>
+          </span>
+          <span className="cl-num">
+            <b>{r.provini}</b> provini
+          </span>
+          <span className="cl-num mana">✦ {r.mana}</span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -126,6 +178,7 @@ export default function HomePage() {
       )}
 
       <ResumeCard />
+      {profile && <Classifica profile={profile} />}
 
       <div className="quick">
         <button className="quick-btn primary" onClick={() => openCapture({ mode: 'text' })}>

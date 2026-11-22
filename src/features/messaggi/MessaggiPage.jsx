@@ -4,7 +4,9 @@ import Icon from '../../components/Icon.jsx';
 import Sheet from '../../components/Sheet.jsx';
 import AudioPlayer from '../../components/AudioPlayer.jsx';
 import { useDbQuery } from '../../db/useDbQuery.js';
-import { db } from '../../db/db.js';
+import { addIdea, db, updateIdea } from '../../db/db.js';
+import { sfidaDelGiorno } from '../../lib/sfide.js';
+import { loadRank } from '../../lib/rimario.js';
 import { useProfile } from '../../lib/profile.js';
 import { vibeLabel } from '../../lib/spunti.js';
 import { cloudLogout, deleteMessage, downloadFile, loadChat, login, markRead, memberName, otherMembers, sendMessage, startCloud, useCloud, useInbox } from '../../lib/cloud.js';
@@ -116,6 +118,27 @@ function Bubble({ m, mine, onDelete }) {
         )}
       </>
     );
+  } else if (m.kind === 'sfida') {
+    const txt = p.tipo === 'catena' ? `Catena di rime: 1 quartina che chiude su «${p.parola}»` : p.testo;
+    content = (
+      <>
+        <div className="msg-kind">⚔ Sfida</div>
+        <div className="msg-title">{txt}</div>
+        {!mine && (
+          <button
+            className="btn sm"
+            onClick={async () => {
+              if (p.tipo === 'catena') return navigate(`/allenamento/catena?parola=${encodeURIComponent(p.parola)}`);
+              const nid = await addIdea({ type: 'text', text: '', tags: ['sfida'] });
+              await updateIdea(nid, { title: `Sfida di ${memberName(m.from_user)}`, text: `${p.testo}\n\n` });
+              navigate(`/taccuino?apri=${nid}`);
+            }}
+          >
+            Accetta
+          </button>
+        )}
+      </>
+    );
   } else if (m.kind === 'beat')
     content = (
       <>
@@ -222,14 +245,28 @@ function Chat({ me, other }) {
           {sending ? <span className="spinner" /> : <Icon name="send" />}
         </button>
       </div>
-      {attach === 'menu' && <AttachPicker onClose={() => setAttach(null)} onPick={(a) => setAttach(a)} />}
+      {attach === 'menu' && (
+        <AttachPicker
+          onClose={() => setAttach(null)}
+          onPick={(a) => setAttach(a)}
+          onSfida={async (payload) => {
+            setAttach(null);
+            try {
+              await sendMessage(other, { kind: 'sfida', body: '', payload });
+              await reload();
+            } catch {
+              alert('Sfida non inviata: controlla la connessione.');
+            }
+          }}
+        />
+      )}
       {attach && attach !== 'menu' && <ShareSheet kind={attach.kind} item={attach.item} to={other} onClose={() => setAttach(null)} onSent={reload} />}
     </div>
   );
 }
 
 /** Scegli cosa mandare: un'idea, una traccia, un beat. */
-function AttachPicker({ onClose, onPick }) {
+function AttachPicker({ onClose, onPick, onSfida }) {
   const [tab, setTab] = useState('idea');
   const ideas = useDbQuery(() => db.ideas.orderBy('createdAt').reverse().limit(50).toArray(), [], []) || [];
   const tracks = useDbQuery(() => db.tracks.orderBy('updatedAt').reverse().toArray(), [], []) || [];
@@ -241,6 +278,7 @@ function AttachPicker({ onClose, onPick }) {
           ['idea', 'Idee'],
           ['track', 'Tracce'],
           ['beat', 'Beat'],
+          ['sfida', 'Sfida'],
         ].map(([k, l]) => (
           <button key={k} className={`tab${tab === k ? ' on' : ''}`} onClick={() => setTab(k)}>
             {l}
@@ -260,6 +298,29 @@ function AttachPicker({ onClose, onPick }) {
               <span className="ellipsis grow">{t.title || 'Senza titolo'}</span>
             </button>
           ))}
+        {tab === 'sfida' && (
+          <div className="stack">
+            <button
+              className="beat-pick"
+              onClick={async () => {
+                let parola = 'impossibile';
+                try {
+                  const rank = await loadRank();
+                  const ws = [...rank.keys()].slice(300, 5000).filter((w) => w.length >= 5);
+                  parola = ws[Math.floor(Math.random() * ws.length)];
+                } catch {
+                  /* offline: parola di riserva */
+                }
+                onSfida({ tipo: 'catena', parola });
+              }}
+            >
+              <span className="grow">∞ Catena di rime: una parola a caso, 1 quartina</span>
+            </button>
+            <button className="beat-pick" onClick={() => onSfida({ tipo: 'testo', testo: sfidaDelGiorno() })}>
+              <span className="grow">◎ La sfida di oggi: {sfidaDelGiorno()}</span>
+            </button>
+          </div>
+        )}
         {tab === 'beat' &&
           beats.map((b) => (
             <button key={b.id} className="beat-pick" onClick={() => onPick({ kind: 'beat', item: b })}>

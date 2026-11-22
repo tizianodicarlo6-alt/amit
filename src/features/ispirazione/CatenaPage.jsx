@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { addIdea } from '../../db/db.js';
 import { countLineSyllables } from '../../lib/italiano.js';
@@ -22,10 +22,19 @@ export default function CatenaPage() {
   const [saved, setSaved] = useState(false);
   const [n, setN] = useState(0);
 
+  const [params] = useSearchParams();
+  const forced = n === 0 ? params.get('parola') : null; // sfida di un socio: parola già decisa
   useEffect(() => {
     let alive = true;
     Promise.all([loadIndex(), loadRank()])
       .then(([index, rank]) => {
+        if (forced) {
+          if (alive) {
+            setWord(forced);
+            setHelp(suggest(index, forced, '', 30));
+          }
+          return;
+        }
         const words = [...rank.keys()].slice(300, 6000).filter((w) => w.length >= 5);
         for (let k = 0; k < 60; k++) {
           const w = pick(words);
