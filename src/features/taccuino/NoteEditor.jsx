@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
@@ -7,7 +7,43 @@ import TagPicker from '../../components/TagPicker.jsx';
 import TrackPicker from '../../components/TrackPicker.jsx';
 import BeatLoop from '../../components/BeatLoop.jsx';
 import RhymeSheet from '../../components/RhymeSheet.jsx';
-import { wordAt } from '../../lib/rimario.js';
+import { loadRank, wordAt } from '../../lib/rimario.js';
+import { quartine } from '../../lib/fuoco.js';
+
+/** Il fuoco: una barra verticale con 4 tacche; dopo ogni quartina il fuoco sale fin dove è arrivata (1-4). */
+function FireBar({ level, count }) {
+  const H = 210;
+  // a ogni quartina nuova il fuoco riparte dal basso e sale
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    setShown(0);
+    const t = setTimeout(() => setShown(level), 80);
+    return () => clearTimeout(t);
+  }, [count, level]);
+  const y = (shown / 4) * H;
+  return (
+    <div className="fire-bar" aria-label={count ? `Ultima quartina: fuoco ${level} su 4` : 'Il fuoco sale dopo ogni quartina'} role="img">
+      <div className="fb-track">
+        <div className="fb-fill" style={{ height: y }} />
+      </div>
+      {[1, 2, 3, 4].map((k) => (
+        <span key={k} className={`fb-tick${k <= shown ? ' on' : ''}`} style={{ bottom: (k / 4) * H - 1 }} />
+      ))}
+      <svg className={`fb-flame l${shown}${shown === 4 ? ' top' : ''}`} style={{ bottom: y }} viewBox="0 0 24 30" aria-hidden>
+        <defs>
+          <linearGradient id="fbg" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0" stopColor="#d7261e" />
+            <stop offset=".55" stopColor="#ff7a1a" />
+            <stop offset="1" stopColor="#ffd24a" />
+          </linearGradient>
+        </defs>
+        <path d="M12 1c1.5 5.5 7 8.5 7 15.5A7 7 0 0 1 5 16.5c0-3.4 1.8-5.4 3.4-7.2.3 2.3 1.4 3.6 2.6 4C11 9 10.8 5 12 1z" fill="url(#fbg)" />
+        <path d="M12 15c.8 2.5 3.2 3.6 3.2 6.6a3.2 3.2 0 0 1-6.4 0c0-1.8 1-2.8 1.8-3.6.2 1 .8 1.6 1.4 1.7-.2-1.7-.4-3 0-4.7z" fill="#fff3c4" />
+      </svg>
+      {count > 0 && <span className="fb-q">Q{count}</span>}
+    </div>
+  );
+}
 import ShareSheet from '../messaggi/ShareSheet.jsx';
 import { useProfile } from '../../lib/profile.js';
 
@@ -51,6 +87,13 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
   const [rimario, setRimario] = useState(null);
   const [sharing, setSharing] = useState(false);
   const profile = useProfile();
+  const [rank, setRank] = useState(null);
+  useEffect(() => {
+    if (profile) loadRank().then(setRank).catch(() => {});
+  }, [profile]);
+  // quartine finite: il fuoco mostra l'ultima
+  const quarts = useMemo(() => (profile ? quartine(text, { rank }) : []), [text, rank, profile]);
+  const lastQ = quarts[quarts.length - 1];
 
   const caret = useRef(0);
   const [created] = useState(idea?.createdAt || Date.now());
@@ -139,6 +182,7 @@ export default function NoteEditor({ idea = null, trackId: initialTrack = null, 
         </button>
       </header>
 
+      {profile && text.trim() && <FireBar level={lastQ?.level || 0} count={quarts.length} />}
       <div className="note-body">
         {beat && <BeatLoop beat={beat} region={loop} onRegion={setLoop} caption={beat.title} />}
         <div className="note-date">{longDate(created)}</div>

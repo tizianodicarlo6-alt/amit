@@ -93,3 +93,28 @@ export function sectionFire(heat, last = 4) {
   return Math.max(0, Math.min(1, avg / 7));
 }
 
+
+/**
+ * Le quartine di un testo: ogni 4 barre piene di fila (le righe vuote separano i blocchi).
+ * Ritorna [{ lines: [indici], level: 0-4 }] — level = quante "barre di fuoco" (0 = niente).
+ */
+export function quartine(text, { rank = null } = {}) {
+  const all = text.split('\n');
+  const heat = heatLines(all, { rank });
+  const out = [];
+  let cur = [];
+  all.forEach((l, i) => {
+    if (!l.trim()) {
+      cur = [];
+      return;
+    }
+    cur.push(i);
+    if (cur.length === 4) {
+      const avg = cur.reduce((s, j) => s + Math.max(0, heat[j].score), 0) / 4;
+      const level = avg >= 6 ? 4 : avg >= 4.5 ? 3 : avg >= 3 ? 2 : avg >= 1.8 ? 1 : 0;
+      out.push({ lines: cur, level, avg: Math.round(avg * 10) / 10 });
+      cur = [];
+    }
+  });
+  return out;
+}

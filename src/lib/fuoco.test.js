@@ -11,3 +11,12 @@ test('fuoco: le righe forti scaldano più di quelle deboli', () => {
   assert.ok(sectionFire(forte) > sectionFire(debole));
   assert.equal(heatLines(['', 'ciao'])[0].level, 0);
 });
+
+test('quartine: fuoco da 0 a 4 dopo ogni 4 barre', async () => {
+  const { quartine } = await import('./fuoco.js');
+  const q = quartine('ci vediamo sotto casa\nuna cosa molto rara\nla mia vita è una salita\nogni ferita mi ha dato la grinta\n\nio vado a casa\ntu mangi la mela\noggi è lunedì\nyeah bro tipo yeah\nincompleta');
+  assert.equal(q.length, 2);
+  assert.deepEqual(q[0].lines, [0, 1, 2, 3]);
+  assert.ok(q[0].level >= 3, String(q[0].level));
+  assert.ok(q[1].level <= 1, String(q[1].level));
+});
