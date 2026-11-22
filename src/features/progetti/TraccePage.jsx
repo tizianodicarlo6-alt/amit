@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDbQuery } from '../../db/useDbQuery.js';
-import { addTrack, db } from '../../db/db.js';
+import { addTrack, db, deleteTrack } from '../../db/db.js';
 import { STATUSES } from '../../constants.js';
 import Icon from '../../components/Icon.jsx';
 import TracksTabs from './TracksTabs.jsx';
@@ -11,6 +11,11 @@ export default function TraccePage() {
   const tracks = useDbQuery(() => db.tracks.orderBy('updatedAt').reverse().toArray(), []);
   const projects = useDbQuery(() => db.projects.toArray(), []) || [];
   const [status, setStatus] = useState('all');
+  const [editing, setEditing] = useState(false); // modalità "elimina"
+  const remove = async (t) => {
+    if (!confirm(`Eliminare la traccia "${t.title || 'Senza titolo'}"? Le note collegate restano nelle Note.`)) return;
+    await deleteTrack(t.id);
+  };
   const navigate = useNavigate();
 
   const projectName = useMemo(() => Object.fromEntries(projects.map((p) => [p.id, p.name])), [projects]);
@@ -21,7 +26,12 @@ export default function TraccePage() {
   return (
     <div className="page">
       <header className="page-head">
-        <h1>Tracce</h1>
+        <h1 className="grow">Tracce</h1>
+        {tracks?.length > 0 && (
+          <button className={`btn sm${editing ? ' primary' : ' ghost'}`} onClick={() => setEditing(!editing)}>
+            {editing ? 'Fine' : 'Modifica'}
+          </button>
+        )}
         <button className="btn primary" onClick={create}>
           <Icon name="plus" size={20} /> Nuova
         </button>
@@ -52,7 +62,18 @@ export default function TraccePage() {
 
       <div className="list">
         {filtered.map((t) => (
-          <TrackCard key={t.id} track={t} projectName={projectName[t.projectId]} />
+          <TrackCard
+            key={t.id}
+            track={t}
+            projectName={projectName[t.projectId]}
+            extra={
+              editing && (
+                <button className="track-del" onClick={() => remove(t)} aria-label={`Elimina ${t.title || 'traccia'}`}>
+                  <Icon name="trash" size={20} />
+                </button>
+              )
+            }
+          />
         ))}
       </div>
     </div>

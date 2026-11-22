@@ -1,7 +1,7 @@
 import { db, setMeta } from './db.js';
 
 // Tabelle incluse nel backup (anche quelle della fase 2, così il formato resta valido).
-const TABLES = ['ideas', 'audio', 'projects', 'tracks', 'beats', 'takes', 'sketches'];
+const TABLES = ['ideas', 'audio', 'projects', 'tracks', 'beats', 'takes', 'sketches', 'finals'];
 const FORMAT = 'amit-backup';
 const VERSION = 1;
 
@@ -39,9 +39,9 @@ export async function createBackup({ includeBeats = true, includeTakes = true } 
   const data = {};
   const skipAudio = new Set();
   if (!includeBeats) (await db.beats.toArray()).forEach((b) => skipAudio.add(b.audioId));
-  if (!includeTakes) (await db.takes.toArray()).forEach((t) => skipAudio.add(t.audioId));
+  if (!includeTakes) [...(await db.takes.toArray()), ...(await db.finals.toArray())].forEach((t) => skipAudio.add(t.audioId));
   for (const t of TABLES) {
-    if (!includeTakes && t === 'takes') {
+    if (!includeTakes && (t === 'takes' || t === 'finals')) {
       data[t] = [];
       continue;
     }

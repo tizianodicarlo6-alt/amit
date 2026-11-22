@@ -1,4 +1,7 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import Sheet from '../../components/Sheet.jsx';
+import { addFinal, db, updateTrack } from '../../db/db.js';
 import Icon from '../../components/Icon.jsx';
 import { STUDIO, bookingLink } from '../../config.js';
 import { getProfile } from '../../lib/profile.js';
@@ -14,6 +17,21 @@ export default function MixSheet(p) {
     if (!voices.length) throw new Error('nessuna take accesa');
     const blob = await p.engine.renderMix({ beat: p.beatBuf, voices, beatGain: p.beatVol, fx: p.fx, bpm: p.bpm });
     return [new File([blob], `${slug(`${p.track.title} - provino`)}.wav`, { type: 'audio/wav' })];
+  };
+
+  // la versione finita resta nell'app, in Tracce → Finite (da lì la ascolti e la metti nei File)
+  const [final, setFinal] = useState(null); // null | 'busy' | 'ok' | { error }
+  const saveFinal = async () => {
+    setFinal('busy');
+    try {
+      const [file] = await prepMix();
+      const v = (await db.finals.where('trackId').equals(p.track.id).count()) + 1;
+      await addFinal({ trackId: p.track.id, title: `${p.track.title || 'Traccia'}${v > 1 ? ` (v${v})` : ''}`, blob: file, duration: p.beatBuf?.duration || 0 });
+      if (!['registrata', 'finita'].includes(p.track.status)) await updateTrack(p.track.id, { status: 'registrata' });
+      setFinal('ok');
+    } catch (e) {
+      setFinal({ error: e?.message || String(e) });
+    }
   };
 
   return (
@@ -58,11 +76,37 @@ export default function MixSheet(p) {
         </div>
 
         <div className="divider" />
+        <div className="export-row primary">
+          <div className="row">
+            <Icon name="tracce" />
+            <div className="grow">
+              <div className="reco-title">Salva come traccia finita</div>
+              <div className="muted small">
+                {final === 'ok' ? (
+                  <>
+                    Salvata ✓ La trovi in{' '}
+                    <Link to="/finite" onClick={p.onClose}>
+                      Tracce → Finite
+                    </Link>
+                    , da lì la ascolti e la metti nei File.
+                  </>
+                ) : (
+                  `Beat + voce + doppie + adlib (${onCount} take) in un file, ordinato nell'app.`
+                )}
+              </div>
+            </div>
+          </div>
+          {final !== 'ok' && (
+            <button className="btn primary" onClick={saveFinal} disabled={final === 'busy' || !onCount}>
+              {final === 'busy' ? <span className="spinner" /> : null} {final === 'busy' ? 'Mixo…' : 'Salva tra le Finite'}
+            </button>
+          )}
+          {final?.error && <p className="error small">Errore: {final.error}</p>}
+        </div>
         <ExportRow
           key={`mix-${JSON.stringify(p.fx)}-${p.voiceDb}-${p.beatVol}-${p.takes.map((t) => `${t.id}${t.included}${t.role}${t.trimStart}${t.trimEnd}${t.pitch}${t.gainDb}${t.offset}`).join()}`}
-          primary
-          icon="tracce"
-          title="Salva il provino"
+          icon="share"
+          title="Manda o salva il file"
           subtitle={`Beat + ${onCount} take con effetti ${preset ? `"${FX_PRESETS[preset].label}"` : 'personalizzati'}, in un unico file.`}
           prepare={prepMix}
         />

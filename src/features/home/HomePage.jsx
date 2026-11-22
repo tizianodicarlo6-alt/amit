@@ -3,7 +3,6 @@ import { useDbQuery } from '../../db/useDbQuery.js';
 import { addTrack, db, getMeta } from '../../db/db.js';
 import { useCapture } from '../../components/CaptureContext.jsx';
 import Icon from '../../components/Icon.jsx';
-import TrackCard from '../progetti/TrackCard.jsx';
 import IdeaCard from '../taccuino/IdeaCard.jsx';
 import { STUDIO, whatsappLink } from '../../config.js';
 import { personalGreeting, useProfile } from '../../lib/profile.js';
@@ -126,7 +125,8 @@ export default function HomePage() {
   const cloud = useCloud();
   const { openCapture } = useCapture();
   const tracks = useDbQuery(() => db.tracks.orderBy('updatedAt').reverse().toArray(), [], []) || [];
-  const ideas = useDbQuery(() => db.ideas.orderBy('createdAt').reverse().limit(3).toArray(), [], []) || [];
+  // le note che stavi scrivendo (le ultime toccate): i provini sono già scritti, stanno in Tracce
+  const ideas = useDbQuery(() => db.ideas.orderBy('updatedAt').reverse().filter((i) => i.type === 'text' && !!(i.text || '').trim()).limit(3).toArray(), [], []) || [];
   const ideaCount = useDbQuery(() => db.ideas.count(), [], 0) || 0;
   const projects = useDbQuery(() => db.projects.toArray(), [], []) || [];
   const lastBackup = useDbQuery(() => getMeta('lastBackupAt'), [], null);
@@ -195,29 +195,18 @@ export default function HomePage() {
         </button>
       </div>
 
-      <SectionHead title="Continua a scrivere" to={tracks.length > 3 ? '/tracce' : null} />
-      {tracks.length === 0 ? (
-        <button className="card empty-card" onClick={newTrack}>
+      <SectionHead title="Continua a scrivere" to="/taccuino" />
+      {ideas.length === 0 ? (
+        <button className="card empty-card" onClick={() => openCapture()}>
           <Icon name="plus" />
-          <span>Crea la tua prima traccia</span>
+          <span>Inizia una nota</span>
         </button>
       ) : (
         <div className="list">
-          {tracks.slice(0, 3).map((t) => (
-            <TrackCard key={t.id} track={t} projectName={projectName[t.projectId]} />
+          {ideas.map((i) => (
+            <IdeaCard key={i.id} idea={i} onClick={() => navigate(`/taccuino?apri=${i.id}`)} />
           ))}
         </div>
-      )}
-
-      {ideas.length > 0 && (
-        <>
-          <SectionHead title="Ultime note" to="/taccuino" />
-          <div className="list">
-            {ideas.map((i) => (
-              <IdeaCard key={i.id} idea={i} onClick={() => navigate('/taccuino')} />
-            ))}
-          </div>
-        </>
       )}
 
       {(needsBackup || !profile) && <SectionHead title="Consigliati" />}

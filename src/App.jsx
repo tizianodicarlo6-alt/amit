@@ -3,6 +3,7 @@ import BottomNav from './components/BottomNav.jsx';
 import { CaptureProvider } from './components/CaptureContext.jsx';
 import TaccuinoPage from './features/taccuino/TaccuinoPage.jsx';
 import TraccePage from './features/progetti/TraccePage.jsx';
+import FinitePage from './features/progetti/FinitePage.jsx';
 import TracciaPage from './features/progetti/TracciaPage.jsx';
 import ProgettiPage from './features/progetti/ProgettiPage.jsx';
 import ProgettoPage from './features/progetti/ProgettoPage.jsx';
@@ -43,6 +44,7 @@ export default function App() {
               <Route path="/home" element={<HomePage />} />
               <Route path="/taccuino" element={<TaccuinoPage />} />
               <Route path="/tracce" element={<TraccePage />} />
+              <Route path="/finite" element={<FinitePage />} />
               <Route path="/traccia/:id" element={<TracciaPage />} />
               <Route path="/progetti" element={<ProgettiPage />} />
               <Route path="/progetto/:id" element={<ProgettoPage />} />

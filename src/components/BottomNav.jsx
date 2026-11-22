@@ -36,7 +36,7 @@ export default function BottomNav() {
           <Icon name="plus" size={32} stroke={2.6} />
         </button>
       )}
-      <Item to="/tracce" icon="tracce" label="Tracce" also={['/progett', '/traccia']} />
+      <Item to="/tracce" icon="tracce" label="Tracce" also={['/progett', '/traccia', '/finite']} />
       <Item to="/beat" icon="beat" label="Beat" also={['/bozza']} />
       {insp && <InspirationSheet onClose={() => setInsp(false)} openCapture={openCapture} />}
     </nav>

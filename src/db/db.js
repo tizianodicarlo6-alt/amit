@@ -18,6 +18,10 @@ db.version(1).stores({
 db.version(2).stores({
   sketches: 'id, createdAt, updatedAt',
 });
+// Tracce finite: il mix (beat + voci + doppie + adlib) salvato dallo studio
+db.version(3).stores({
+  finals: 'id, trackId, createdAt',
+});
 
 export const newId = () =>
   globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -141,12 +145,32 @@ async function addTrackRaw({ title = 'Nuova traccia', projectId = null } = {}) {
 const updateTrackRaw = (id, changes) => db.tracks.update(id, { ...changes, updatedAt: now() });
 
 async function deleteTrackRaw(id) {
-  await db.transaction('rw', db.tracks, db.ideas, db.takes, db.audio, async () => {
+  await db.transaction('rw', db.tracks, db.ideas, db.takes, db.audio, db.finals, async () => {
+    // le versioni finite restano (si cancellano da sole in "Finite"), ma senza traccia
+    await db.finals.where('trackId').equals(id).modify({ trackId: null });
     await db.ideas.where('trackId').equals(id).modify({ trackId: null });
     const takes = await db.takes.where('trackId').equals(id).toArray();
     await db.audio.bulkDelete(takes.map((t) => t.audioId));
     await db.takes.where('trackId').equals(id).delete();
     await db.tracks.delete(id);
+  });
+}
+
+// ---------- Tracce finite ----------
+async function addFinalRaw({ trackId, title, blob, duration = 0 }) {
+  const id = newId();
+  const audioId = newId();
+  await db.transaction('rw', db.finals, db.audio, async () => {
+    await db.audio.put({ id: audioId, blob, mime: blob.type || 'audio/wav', kind: 'final' });
+    await db.finals.put({ id, trackId, title, audioId, duration, size: blob.size, createdAt: now() });
+  });
+  return id;
+}
+async function deleteFinalRaw(id) {
+  await db.transaction('rw', db.finals, db.audio, async () => {
+    const f = await db.finals.get(id);
+    if (f) await db.audio.delete(f.audioId);
+    await db.finals.delete(id);
   });
 }
 
@@ -291,3 +315,5 @@ export const splitTake = (...args) => withDb(() => splitTakeRaw(...args));
 export const addSketch = (...args) => withDb(() => addSketchRaw(...args));
 export const updateSketch = (...args) => withDb(() => updateSketchRaw(...args));
 export const deleteSketch = (...args) => withDb(() => deleteSketchRaw(...args));
+export const addFinal = (...args) => withDb(() => addFinalRaw(...args));
+export const deleteFinal = (...args) => withDb(() => deleteFinalRaw(...args));
