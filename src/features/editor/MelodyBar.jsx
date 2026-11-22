@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import Icon from '../../components/Icon.jsx';
 import { decodeBeat } from '../../components/BeatLoop.jsx';
 import { micErrorMessage } from '../../components/useRecorder.js';
-import { db, newId, updateTrack } from '../../db/db.js';
+import { db, newId } from '../../db/db.js';
 import { encodeWav } from '../../lib/wav.js';
 import { melodyPhrases } from '../../lib/melodyPhrases.js';
 import { StudioEngine } from '../studio/engine.js';
@@ -18,7 +18,7 @@ const readLatency = () => {
 };
 
 const takeCache = new Map();
-async function decodeTake(audioId, sr) {
+export async function decodeTake(audioId, sr) {
   const k = `${audioId}@${sr}`;
   if (!takeCache.has(k)) {
     takeCache.set(
@@ -44,14 +44,14 @@ export const melodyOf = (track, key) => track.studio?.melodies?.[key] || { takes
 export const selectedTake = (m) => m.takes.find((t) => t.id === m.sel) || m.takes[m.takes.length - 1] || null;
 
 // 🎤 Nanana: registri la melodia sul pezzo in loop, l'app trova le frasi e le sillabe
-export default function MelodyBar({ track, beat, region, sectionKey, onOverlay, onPause }) {
+export default function MelodyBar({ melody, onChange, beat, region, onOverlay, onPause }) {
   const engineRef = useRef(null);
   const handleRef = useRef(null);
   const [state, setState] = useState('idle'); // idle | starting | recording | working
   const [pre, setPre] = useState(0);
   const [pos, setPos] = useState(0);
   const [msg, setMsg] = useState('');
-  const m = melodyOf(track, sectionKey);
+  const m = melody || { takes: [], sel: null, listen: true };
   const take = selectedTake(m);
   const dur = region ? region.to - region.from : 0;
 
@@ -76,7 +76,7 @@ export default function MelodyBar({ track, beat, region, sectionKey, onOverlay, 
     };
   }, [take?.id, m.listen, beat.audioId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const save = (next) => updateTrack(track.id, { studio: { ...(track.studio || {}), melodies: { ...(track.studio?.melodies || {}), [sectionKey]: next } } });
+  const save = (next) => onChange(next);
 
   useEffect(() => {
     if (state !== 'recording') return;

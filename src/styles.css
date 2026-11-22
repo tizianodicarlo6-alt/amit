@@ -656,3 +656,21 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .map-row { display: flex; gap: 8px; font-size: 14px; }
 .map-details { margin-bottom: 8px; }
 .map-details summary { cursor: pointer; font-weight: 700; padding: 8px 0; }
+
+/* Pallina dei nanana + pagina */
+.nn-ball { position: fixed; z-index: 22; width: 56px; height: 56px; border-radius: 50%; border: 1px solid #ffffff40; background: radial-gradient(circle at 35% 30%, #3a3a42, #121215 70%); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: .95; font-weight: 900; font-size: 13px; letter-spacing: .02em; box-shadow: 0 6px 22px rgba(0,0,0,.6), 0 0 0 3px rgba(255,255,255,.06); touch-action: none; user-select: none; -webkit-user-select: none; }
+.nn-ball span:last-child { opacity: .55; }
+.nn-ball:active { transform: scale(.94); }
+.nanana { padding-bottom: calc(40px + var(--safe-b)); }
+.nn-hint { margin-top: 8px; }
+.nn-phrases { gap: 12px; margin-top: 4px; }
+.nn-phrase { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); }
+.nn-top { display: flex; align-items: center; gap: 8px; }
+.nn-n { font-size: 12px; font-weight: 800; color: var(--muted); white-space: nowrap; }
+.sylpat { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.sylpat .sp { height: 10px; border-radius: 5px; border: 1.5px solid #9a9aa3; }
+.sylpat .sp.acc { background: #fff; border-color: #fff; }
+.nn-line { display: flex; align-items: center; gap: 8px; }
+.nn-line .input { flex: 1; min-width: 0; }
+.nn-count { min-width: 44px; text-align: right; font-size: 13px; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
+.nn-count.fit { color: #3ddc84; } .nn-count.near { color: #f5c542; } .nn-count.off { color: #ff6b6b; }

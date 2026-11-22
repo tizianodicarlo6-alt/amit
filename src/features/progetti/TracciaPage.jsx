@@ -298,7 +298,7 @@ function WriteOnBeat({ track }) {
           overlay={overlay}
           pauseSignal={pauseSig}
         >
-          <MelodyBar track={track} beat={beat} region={region} sectionKey={active || '_'} onOverlay={setOverlay} onPause={() => setPauseSig((n) => n + 1)} />
+          <MelodyBar melody={melodyOf(track, active || '_')} onChange={(next) => updateTrack(track.id, { studio: { ...(track.studio || {}), melodies: { ...(track.studio?.melodies || {}), [active || '_']: next } } })} beat={beat} region={region} onOverlay={setOverlay} onPause={() => setPauseSig((n) => n + 1)} />
         </BeatLoop>
       )}
       <LyricsEditor key={track.id} track={track} activeId={active} onFocusSection={setActive} targets={targets} />

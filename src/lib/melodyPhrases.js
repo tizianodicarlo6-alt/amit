@@ -69,7 +69,16 @@ export function melodyPhrases(x, sr, { gap = 0.2, minPhrase = 0.12, minSyl = 0.0
       }
       peaks.push(i);
     }
-    phrases.push({ start: +(sg.s * hop).toFixed(2), end: +((sg.e + 1) * hop).toFixed(2), syllables: Math.max(1, peaks.length) });
+    // ogni sillaba: quando parte, quanto dura, se è "forte" (accento) — serve per far stare le parole nella melodia
+    const pk = peaks.length ? peaks : [0];
+    const durs = pk.map((p, k) => ((k + 1 < pk.length ? pk[k + 1] : part.length) - p) * hop);
+    const medDur = [...durs].sort((x, y) => x - y)[Math.floor(durs.length / 2)] || 0.2;
+    const syl = pk.map((p, k) => ({
+      t: +((sg.s + p) * hop).toFixed(2),
+      dur: +durs[k].toFixed(2),
+      accent: part[p] >= max * 0.85 || durs[k] >= medDur * 1.6,
+    }));
+    phrases.push({ start: +(sg.s * hop).toFixed(2), end: +((sg.e + 1) * hop).toFixed(2), syllables: Math.max(1, peaks.length), syl });
   }
   return phrases;
 }

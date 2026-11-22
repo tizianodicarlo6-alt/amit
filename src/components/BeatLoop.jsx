@@ -28,7 +28,7 @@ export async function decodeBeat(audioId) {
 }
 
 /** Solo il pezzo [from, to] del beat, come WAV: col lettore in loop gira senza buchi. */
-function sliceWav(buf, from, to, overlay = null) {
+export function sliceWav(buf, from, to, overlay = null) {
   const sr = buf.sampleRate;
   const a = Math.max(0, Math.round(from * sr));
   const b = Math.min(buf.length, Math.round(to * sr));

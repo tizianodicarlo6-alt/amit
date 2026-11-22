@@ -13,6 +13,8 @@ import StudioPage from './features/studio/StudioPage.jsx';
 import SketchPage from './features/bozza/SketchPage.jsx';
 import MessaggiPage from './features/messaggi/MessaggiPage.jsx';
 import ParliamonePage from './features/ispirazione/ParliamonePage.jsx';
+import NananaPage from './features/nanana/NananaPage.jsx';
+import NananaBall from './features/nanana/NananaBall.jsx';
 import { useEffect } from 'react';
 import { useProfile } from './lib/profile.js';
 import { startCloud } from './lib/cloud.js';
@@ -48,6 +50,7 @@ export default function App() {
               <Route path="/bozza/:id" element={<SketchPage />} />
               <Route path="/messaggi" element={<MessaggiPage />} />
               <Route path="/parliamone" element={<ParliamonePage />} />
+              <Route path="/nanana" element={<NananaPage />} />
               {/* Prossimamente: /allenamento */}
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>
@@ -55,6 +58,7 @@ export default function App() {
         </main>
         <BottomNav />
         <CloudBoot />
+        <NananaBall />
         <ErrorToast />
       </CaptureProvider>
     </HashRouter>

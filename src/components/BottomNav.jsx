@@ -21,7 +21,7 @@ export default function BottomNav() {
   const { pathname } = useLocation();
   const profile = useProfile();
   const [insp, setInsp] = useState(false);
-  if (pathname.startsWith('/studio') || pathname.startsWith('/bozza') || pathname.startsWith('/messaggi') || pathname.startsWith('/parliamone')) return null; // lo studio usa tutto lo schermo
+  if (pathname.startsWith('/studio') || pathname.startsWith('/bozza') || pathname.startsWith('/messaggi') || pathname.startsWith('/parliamone') || pathname.startsWith('/nanana')) return null; // lo studio usa tutto lo schermo
   return (
     <nav className="bottom-nav" aria-label="Navigazione principale">
       <Item to="/home" icon="home" label="Home" />
